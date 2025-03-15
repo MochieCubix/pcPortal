@@ -1,0 +1,719 @@
+"use client";
+
+import { useState, useEffect, Fragment } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import ClientLayout from "@/components/Layouts/ClientLayout";
+import { AddInvoiceModal } from '@/components/AddInvoiceModal';
+import ViewInvoiceModal from "@/components/ViewInvoiceModal";
+import PDFViewerModal from "@/components/PDFViewerModal";
+import {
+  EyeIcon,
+  PaperAirplaneIcon,
+  PencilIcon,
+  TrashIcon,
+  CalendarIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
+import { Popover, Transition } from "@headlessui/react";
+import { DayPicker, DateRange } from "react-day-picker";
+import "react-day-picker/dist/style.css";
+
+interface Invoice {
+  _id: string;
+  invoiceNumber: string;
+  clientId: string;
+  clientName?: string;
+  jobsiteId?: string;
+  jobsiteName?: string;
+  total: number;
+  status: string;
+  dueDate: string;
+  createdAt: string;
+  fileUrl?: string;
+}
+
+interface Jobsite {
+  _id: string;
+  name: string;
+}
+
+interface ViewInvoiceData {
+  _id: string;
+  invoiceNumber: string;
+  date: string;
+  amount: number;
+  status: string;
+  fileUrl?: string;
+  clientName?: string;
+  jobsiteName?: string;
+}
+
+export default function InvoicesPage() {
+  const { user } = useAuth();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [jobsites, setJobsites] = useState<Jobsite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] =
+    useState<ViewInvoiceData | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [isFilteringByDate, setIsFilteringByDate] = useState(false);
+  const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfTitle, setPdfTitle] = useState<string>("");
+
+  const fetchInvoices = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:5000/api/invoices", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch invoices");
+      }
+      const data = await response.json();
+      console.log("Fetched invoices:", data);
+      
+      // Debug the client data specifically to understand what we're getting
+      data.forEach((invoice: any, index: number) => {
+        console.log(`[FRONTEND DEBUG] Invoice #${index + 1} - ${invoice.invoiceNumber}:`, {
+          hasClientObj: !!invoice.client,
+          clientType: invoice.client ? typeof invoice.client : 'null',
+          clientValue: invoice.client,
+          clientId: invoice.client?._id,
+          companyName: invoice.client?.companyName,
+          firstName: invoice.client?.firstName,
+          lastName: invoice.client?.lastName
+        });
+      });
+      
+      // Process the invoices to ensure client and jobsite names are available
+      const processedInvoices = data.map((invoice: any) => {
+        // Prepare a standard invoice object
+        const processedInvoice: Invoice = {
+          _id: invoice._id,
+          invoiceNumber: invoice.invoiceNumber,
+          clientId: invoice.client?._id || invoice.client || "",
+          jobsiteId: invoice.jobsite?._id || invoice.jobsite || "",
+          total: invoice.amount || 0,
+          status: invoice.status || "pending",
+          dueDate: invoice.dueDate || "",
+          createdAt: invoice.createdAt || "",
+          fileUrl: invoice.fileUrl || "",
+        };
+        
+        // Extract client name with proper fallbacks
+        if (invoice.client) {
+          // Client was found and returned as an object
+          if (typeof invoice.client === 'object') {
+            if (invoice.client.notFound) {
+              // Backend found the ID but no matching client in either model
+              processedInvoice.clientName = `ID Not Found: ${invoice.client._id.substring(0, 6)}...`;
+              console.log(`[FRONTEND DEBUG] Client ID not found:`, invoice.client._id);
+            } else if (invoice.client.error) {
+              // There was an error fetching the client data
+              processedInvoice.clientName = `Error: ${invoice.client._id.substring(0, 6)}...`;
+              console.log(`[FRONTEND DEBUG] Error fetching client:`, invoice.client._id);
+            } else if (invoice.client.companyName) {
+              // Company name is available
+              processedInvoice.clientName = invoice.client.companyName;
+              console.log(`[FRONTEND DEBUG] Using company name:`, invoice.client.companyName);
+            } else if (invoice.client.firstName || invoice.client.lastName) {
+              // Individual name is available
+              const firstName = invoice.client.firstName || '';
+              const lastName = invoice.client.lastName || '';
+              processedInvoice.clientName = `${firstName} ${lastName}`.trim();
+              console.log(`[FRONTEND DEBUG] Using person name:`, processedInvoice.clientName);
+            } else if (invoice.client.email) {
+              // Email is available as fallback
+              processedInvoice.clientName = invoice.client.email;
+              console.log(`[FRONTEND DEBUG] Using email:`, invoice.client.email);
+            } else {
+              // Object exists but no useful information
+              processedInvoice.clientName = "Client Data Incomplete";
+              console.log(`[FRONTEND DEBUG] Client object has no useful data:`, invoice.client);
+            }
+          } else {
+            // Client is not an object
+            processedInvoice.clientName = `ID: ${String(invoice.client).substring(0, 6)}...`;
+            console.log(`[FRONTEND DEBUG] Client is not an object:`, invoice.client);
+          }
+        } else {
+          processedInvoice.clientName = "No Client Data";
+          console.log(`[FRONTEND DEBUG] No client data for invoice:`, invoice._id);
+        }
+        
+        // Debug the jobsite data
+        console.log(`[FRONTEND DEBUG] Jobsite for invoice ${invoice.invoiceNumber}:`, {
+          hasJobsiteObj: !!invoice.jobsite,
+          jobsiteType: invoice.jobsite ? typeof invoice.jobsite : 'null',
+          jobsiteValue: invoice.jobsite,
+          jobsiteId: invoice.jobsite?._id,
+          jobsiteName: invoice.jobsite?.name
+        });
+        
+        // Extract jobsite name with proper fallbacks
+        if (invoice.jobsite) {
+          if (typeof invoice.jobsite === 'object') {
+            if (invoice.jobsite.notFound) {
+              // Backend found the ID but no matching jobsite
+              processedInvoice.jobsiteName = `Jobsite Not Found`;
+              console.log(`[FRONTEND DEBUG] Jobsite ID not found:`, invoice.jobsite._id);
+            } else if (invoice.jobsite.error) {
+              // There was an error fetching the jobsite data
+              processedInvoice.jobsiteName = `Error Loading Jobsite`;
+              console.log(`[FRONTEND DEBUG] Error fetching jobsite:`, invoice.jobsite._id);
+            } else if (invoice.jobsite.name) {
+              processedInvoice.jobsiteName = invoice.jobsite.name;
+              console.log(`[FRONTEND DEBUG] Using jobsite name:`, invoice.jobsite.name);
+            } else {
+              processedInvoice.jobsiteName = "Unnamed Jobsite";
+              console.log(`[FRONTEND DEBUG] Jobsite object has no name:`, invoice.jobsite);
+            }
+          } else {
+            // Try to find this jobsite in the jobsites state
+            const jobsitesData: Jobsite[] = jobsites;
+            const foundJobsite = jobsitesData.find(j => j._id === invoice.jobsite);
+            if (foundJobsite && foundJobsite.name) {
+              processedInvoice.jobsiteName = foundJobsite.name;
+              console.log(`[FRONTEND DEBUG] Found jobsite name from cache:`, foundJobsite.name);
+            } else {
+              // Just a string ID, not populated from backend
+              processedInvoice.jobsiteName = "Jobsite " + String(invoice.jobsite).substring(0, 8) + "...";
+              console.log(`[FRONTEND DEBUG] Jobsite is just an ID:`, invoice.jobsite);
+            }
+          }
+        } else {
+          processedInvoice.jobsiteName = "No Jobsite Assigned";
+          console.log(`[FRONTEND DEBUG] No jobsite data for invoice:`, invoice._id);
+        }
+        
+        return processedInvoice;
+      });
+      
+      console.log("Processed invoices:", processedInvoices.length);
+      setInvoices(processedInvoices);
+    } catch (err) {
+      console.error("Error in fetchInvoices:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch invoices");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchJobsites = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:5000/api/jobsites", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch jobsites");
+      }
+      const data = await response.json();
+      setJobsites(data);
+      
+      // If we already have invoices loaded, update any with missing jobsite names
+      if (invoices.length > 0) {
+        const updatedInvoices = invoices.map(invoice => {
+          // If invoice has a jobsite ID but not a proper name
+          if (invoice.jobsiteId && invoice.jobsiteName?.startsWith('Jobsite ')) {
+            // Try to find the jobsite in the newly loaded data
+            const jobsitesData: Jobsite[] = data;
+            const foundJobsite = jobsitesData.find(j => j._id === invoice.jobsiteId);
+            if (foundJobsite && foundJobsite.name) {
+              return {
+                ...invoice,
+                jobsiteName: foundJobsite.name
+              };
+            }
+          }
+          return invoice;
+        });
+        
+        setInvoices(updatedInvoices);
+      }
+    } catch (err) {
+      console.error("Error fetching jobsites:", err);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      await fetchJobsites();
+      await fetchInvoices();
+    };
+    
+    loadData();
+  }, []);
+
+  const handleSendEmail = async (invoiceId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `http://localhost:5000/api/invoices/${invoiceId}/send-email`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      if (!response.ok) {
+        throw new Error("Failed to send invoice email");
+      }
+      alert("Invoice email sent successfully");
+    } catch (err) {
+      alert(
+        err instanceof Error ? err.message : "Failed to send invoice email",
+      );
+    }
+  };
+
+  const handleViewInvoice = (invoice: Invoice) => {
+    console.log("Viewing invoice:", invoice);
+    
+    if (invoice.fileUrl) {
+      // Show PDF in modal
+      setPdfUrl(invoice.fileUrl);
+      setPdfTitle(`Invoice #${invoice.invoiceNumber}`);
+      setShowPdfModal(true);
+    } else {
+      // Create the view data object with all required fields
+      const viewData: ViewInvoiceData = {
+        _id: invoice._id,
+        invoiceNumber: invoice.invoiceNumber,
+        date: invoice.createdAt,
+        amount: invoice.total || 0,
+        status: invoice.status,
+        fileUrl: invoice.fileUrl || "",
+        clientName: invoice.clientName || "Unknown Client",
+        jobsiteName: invoice.jobsiteName || "No Jobsite",
+      };
+      setSelectedInvoice(viewData);
+      setShowViewModal(true);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const clearDateFilter = () => {
+    setDateRange(undefined);
+    setIsFilteringByDate(false);
+  };
+
+  const filteredInvoices = invoices.filter((invoice) => {
+    const matchesSearch =
+      invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice.clientName?.toLowerCase() || "").includes(
+        searchTerm.toLowerCase(),
+      ) ||
+      (invoice.jobsiteName?.toLowerCase() || "").includes(
+        searchTerm.toLowerCase(),
+      );
+    const matchesStatus =
+      statusFilter === "all" || invoice.status === statusFilter;
+    // Date filtering
+    let matchesDate = true;
+    if (isFilteringByDate && dateRange?.from) {
+      const invoiceDate = new Date(invoice.createdAt);
+      invoiceDate.setHours(0, 0, 0, 0); // Normalize time part
+      if (dateRange.from && !dateRange.to) {
+        return invoiceDate >= dateRange.from;
+      }
+      // If both from and to dates are set
+      if (dateRange.from && dateRange.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999); // End of day
+        return invoiceDate >= dateRange.from && invoiceDate <= toDate;
+      }
+    }
+    return matchesSearch && matchesStatus && matchesDate;
+  });
+
+  // Handle checkbox selection
+  const handleSelectInvoice = (invoiceId: string) => {
+    setSelectedInvoices((prev) => {
+      if (prev.includes(invoiceId)) {
+        return prev.filter((id) => id !== invoiceId);
+      } else {
+        return [...prev, invoiceId];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedInvoices([]);
+    } else {
+      setSelectedInvoices(filteredInvoices.map((invoice) => invoice._id));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  const handleBulkAction = (action: "email" | "delete") => {
+    if (selectedInvoices.length === 0) {
+      alert("Please select at least one invoice");
+      return;
+    }
+    if (action === "email") {
+      if (
+        confirm(
+          `Send email for ${selectedInvoices.length} selected invoice(s)?`,
+        )
+      ) {
+        // Implement bulk email sending
+        selectedInvoices.forEach((id) => handleSendEmail(id));
+      }
+    } else if (action === "delete") {
+      if (confirm(`Delete ${selectedInvoices.length} selected invoice(s)?`)) {
+        // Implement bulk delete
+        alert("Bulk delete functionality to be implemented");
+      }
+    }
+  };
+
+  // Reset selected invoices when filters change
+  useEffect(() => {
+    setSelectedInvoices([]);
+    setSelectAll(false);
+  }, [searchTerm, statusFilter, isFilteringByDate, dateRange]);
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="rounded-lg bg-white p-8 shadow-md">
+          <p className="text-red-600">Access Denied</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <ClientLayout>
+      <div className="py-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
+          <div className="mb-6 flex items-center justify-between">
+            <h1 className="text-2xl font-semibold text-gray-900">Invoices</h1>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Add Invoice
+            </button>
+          </div>
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="Search invoices..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+            </div>
+            <div className="w-full sm:w-48">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+              </select>
+            </div>
+            {/* Date Range Picker */}
+            <div className="w-full sm:w-auto">
+              <Popover className="relative inline-block w-full">
+                {({ open }: { open: boolean }) => (
+                  <>
+                    <Popover.Button
+                      className={`inline-flex w-full items-center border px-3 py-2 sm:w-auto ${isFilteringByDate ? "border-blue-500 bg-blue-50" : "border-gray-300"} rounded-md bg-white text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50`}
+                    >
+                      <CalendarIcon className="mr-1 h-4 w-4" />
+                      <span>
+                        {isFilteringByDate && dateRange?.from
+                          ? `${dateRange.from ? formatDate(dateRange.from.toISOString()) : ""} ${dateRange.to ? " - " + formatDate(dateRange.to.toISOString()) : ""}`
+                          : "Filter by Date"}
+                      </span>
+                      {isFilteringByDate && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearDateFilter();
+                          }}
+                          className="ml-1 cursor-pointer text-gray-400 hover:text-gray-600"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                        </span>
+                      )}
+                    </Popover.Button>
+                    <Transition
+                      as={Fragment}
+                      enter="transition ease-out duration-200"
+                      enterFrom="opacity-0 translate-y-1"
+                      enterTo="opacity-100 translate-y-0"
+                      leave="transition ease-in duration-150"
+                      leaveFrom="opacity-100 translate-y-0"
+                      leaveTo="opacity-0 translate-y-1"
+                    >
+                      <Popover.Panel className="absolute right-0 z-50 mt-1 transform px-4 sm:px-0 lg:max-w-3xl">
+                        <div className="overflow-hidden rounded-lg shadow-lg ring-1 ring-black ring-opacity-5">
+                          <div className="relative bg-white p-4">
+                            <DayPicker
+                              mode="range"
+                              selected={dateRange}
+                              onSelect={setDateRange}
+                              footer={
+                                <div className="mt-2 text-center">
+                                  <button
+                                    onClick={() => {
+                                      setIsFilteringByDate(!!dateRange?.from);
+                                    }}
+                                    className="rounded bg-blue-500 px-2 py-1 text-sm text-white"
+                                  >
+                                    Apply Filter
+                                  </button>
+                                </div>
+                              }
+                            />
+                          </div>
+                        </div>
+                      </Popover.Panel>
+                    </Transition>
+                  </>
+                )}
+              </Popover>
+            </div>
+          </div>
+          {/* Bulk Actions */}
+          {selectedInvoices.length > 0 && (
+            <div className="mb-4 flex items-center justify-between rounded-md bg-blue-50 p-3">
+              <div className="text-sm text-blue-700">
+                {selectedInvoices.length} invoice(s) selected
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => handleBulkAction("email")}
+                  className="rounded-md border border-transparent bg-green-600 px-3 py-1 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  Send Email
+                </button>
+                <button
+                  onClick={() => handleBulkAction("delete")}
+                  className="rounded-md border border-transparent bg-red-600 px-3 py-1 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
+          {loading ? (
+            <div className="py-12 text-center">
+              <p>Loading invoices...</p>
+            </div>
+          ) : error ? (
+            <div className="border-l-4 border-red-400 bg-red-50 p-4">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          ) : (
+            <div className="overflow-hidden bg-white shadow sm:rounded-lg">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th className="bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={selectAll}
+                            onChange={handleSelectAll}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </div>
+                      </th>
+                      <th className="bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Invoice #
+                      </th>
+                      <th className="bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Client
+                      </th>
+                      <th className="bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Jobsite
+                      </th>
+                      <th className="bg-gray-50 px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Amount
+                      </th>
+                      <th className="bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Status
+                      </th>
+                      <th className="bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Date
+                      </th>
+                      <th className="bg-gray-50 px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {filteredInvoices.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-4 text-center">
+                          {loading
+                            ? "Loading invoices..."
+                            : "No invoices found"}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredInvoices.map((invoice) => (
+                        <tr key={invoice._id} className="hover:bg-gray-50">
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                            <input
+                              type="checkbox"
+                              checked={selectedInvoices.includes(invoice._id)}
+                              onChange={() => handleSelectInvoice(invoice._id)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                            {invoice.invoiceNumber}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                            {invoice.clientName && 
+                             invoice.clientName !== "Loading..." && 
+                             invoice.clientName !== "No Client Data" &&
+                             invoice.clientName !== "Unknown Client" ? (
+                              <span className="font-medium">{invoice.clientName}</span>
+                            ) : invoice.clientId ? (
+                              <span className="text-amber-600">
+                                {invoice.clientId.substring(0, 8)}...
+                              </span>
+                            ) : (
+                              <span className="text-amber-600">No Client Data</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                            {invoice.jobsiteName ? (
+                              invoice.jobsiteName === "No Jobsite Assigned" ? (
+                                <span className="text-gray-400">No Jobsite</span>
+                              ) : (
+                                <span className="font-medium">{invoice.jobsiteName}</span>
+                              )
+                            ) : (
+                              <span className="text-gray-400">No Jobsite</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm text-gray-900">
+                            ${invoice.total ? invoice.total.toFixed(2) : "0.00"}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4">
+                            <span
+                              className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
+                                invoice.status === "paid"
+                                  ? "bg-green-100 text-green-800"
+                                  : invoice.status === "overdue"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {invoice.status}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                            {invoice.dueDate
+                              ? new Date(invoice.dueDate).toLocaleDateString()
+                              : "N/A"}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                            <div className="flex justify-end space-x-3">
+                              <button
+                                onClick={() => handleViewInvoice(invoice)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="View Invoice"
+                              >
+                                <EyeIcon className="h-5 w-5" />
+                              </button>
+                              <button
+                                onClick={() => handleSendEmail(invoice._id)}
+                                className="text-green-600 hover:text-green-900"
+                                title="Send Email"
+                              >
+                                <PaperAirplaneIcon className="h-5 w-5" />
+                              </button>
+                              <button
+                                className="text-indigo-600 hover:text-indigo-900"
+                                title="Edit Invoice"
+                              >
+                                <PencilIcon className="h-5 w-5" />
+                              </button>
+                              <button
+                                className="text-red-600 hover:text-red-900"
+                                title="Delete Invoice"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      {showAddModal && (
+        <AddInvoiceModal
+          isOpen={showAddModal}
+          onClose={() => {
+            setShowAddModal(false);
+            setSelectedInvoice(null);
+          }}
+          onSuccess={() => {
+            fetchInvoices();
+            setShowAddModal(false);
+          }}
+        />
+      )}
+      {showViewModal && selectedInvoice && (
+        <ViewInvoiceModal
+          isOpen={showViewModal}
+          invoice={selectedInvoice}
+          onClose={() => {
+            setShowViewModal(false);
+            setSelectedInvoice(null);
+          }}
+        />
+      )}
+      
+      {/* PDF Viewer Modal */}
+      <PDFViewerModal
+        isOpen={showPdfModal}
+        onClose={() => setShowPdfModal(false)}
+        pdfUrl={pdfUrl}
+        title={pdfTitle}
+      />
+    </ClientLayout>
+  );
+}

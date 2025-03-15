@@ -22,8 +22,8 @@ const InvoiceSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
-        default: 'draft'
+        enum: ['pending', 'draft', 'sent', 'paid', 'overdue', 'cancelled'],
+        default: 'pending'
     },
     issueDate: {
         type: Date,

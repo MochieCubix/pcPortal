@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { authenticateToken, isAdmin } = require('../middleware/auth');
+const { authenticateToken, isAdmin, logActivity } = require('../middleware/auth');
 const config = require('../config/config');
 const { generateOTP, generateToken, sendMagicLink, sendOTP } = require('../services/emailService');
+const bcrypt = require('bcryptjs');
 
 // Get all users (admin only)
 router.get('/users', authenticateToken, isAdmin, async (req, res) => {
@@ -277,35 +278,57 @@ router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Please provide email and password' });
+        }
+        
         // Find user by email
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        // Check if password is correct
-        const isMatch = await user.comparePassword(password);
+        // Check password
+        const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        // Generate JWT
-        const token = jwt.sign({ userId: user._id }, config.JWT_SECRET, { expiresIn: '7d' });
+        // Create JWT token
+        const token = jwt.sign(
+            { userId: user._id },
+            config.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+        
+        // Log the login activity
+        const ActivityLog = require('../models/ActivityLog');
+        const activityLog = new ActivityLog({
+            user: user._id,
+            action: 'login',
+            resourceType: 'user',
+            resourceId: user._id,
+            description: `${user.firstName} ${user.lastName} logged in`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        });
+        await activityLog.save();
         
         // Return user info and token
         res.json({
+            token,
             user: {
-                _id: user._id,
-                email: user.email,
+                id: user._id,
                 firstName: user.firstName,
                 lastName: user.lastName,
-                role: user.role,
-                companyName: user.companyName
-            },
-            token
+                email: user.email,
+                role: user.role
+            }
         });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 

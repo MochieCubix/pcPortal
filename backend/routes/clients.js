@@ -1,174 +1,182 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
+const Client = require('../models/Client');
 const Jobsite = require('../models/Jobsite');
-const Document = require('../models/Document');
-const { authenticateToken, isAdmin } = require('../middleware/auth');
+const { authenticateToken, isAdmin, logActivity } = require('../middleware/auth');
+const ActivityLog = require('../models/ActivityLog');
 
 // Get all clients (admin only)
 router.get('/', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const clients = await User.find({ role: 'client' })
-            .select('-password -emailVerificationToken -emailVerificationExpires -currentOTP')
-            .sort({ createdAt: -1 });
-        
+        const clients = await Client.find();
         res.json(clients);
-    } catch (error) {
-        console.error('Error fetching clients:', error);
-        res.status(500).json({ error: 'Failed to fetch clients' });
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching clients' });
     }
 });
 
-// Get client by ID (admin only)
+// Get client jobsites (admin only)
+router.get('/:id/jobsites', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const jobsites = await Jobsite.find({ client: req.params.id })
+            .populate('supervisors', 'firstName lastName email')
+            .sort({ createdAt: -1 });
+        res.json(jobsites);
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching client jobsites' });
+    }
+});
+
+// Get single client (admin only)
 router.get('/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const client = await User.findOne({ _id: req.params.id, role: 'client' })
-            .select('-password -emailVerificationToken -emailVerificationExpires -currentOTP');
-        
+        const client = await Client.findById(req.params.id);
         if (!client) {
             return res.status(404).json({ error: 'Client not found' });
         }
-        
         res.json(client);
-    } catch (error) {
-        console.error('Error fetching client:', error);
-        res.status(500).json({ error: 'Failed to fetch client' });
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching client' });
     }
 });
 
-// Create new client (admin only)
+// Create client (admin only)
 router.post('/', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const { companyName, phone, address, suburb, postcode } = req.body;
+        const client = new Client(req.body);
+        await client.save();
         
-        // Create a new client with only company information
-        const newClient = new User({
-            // Set empty values for fields that are no longer required
-            email: '',
-            firstName: '',
-            lastName: '',
-            // Set the required fields
-            companyName,
-            contactNumber: phone,
-            address: {
-                street: address,
-                city: suburb,
-                zipCode: postcode,
-                country: 'Australia' // Default value
-            },
-            role: 'client',
-            // Generate a random password (not used but required by schema)
-            password: Math.random().toString(36).slice(-8)
+        // Log the activity
+        const activityLog = new ActivityLog({
+            user: req.user._id,
+            action: 'create',
+            resourceType: 'client',
+            resourceId: client._id,
+            description: client.companyName,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
         });
+        await activityLog.save();
         
-        await newClient.save();
-        
-        res.status(201).json({
-            message: 'Client created successfully',
-            client: {
-                _id: newClient._id,
-                companyName: newClient.companyName,
-                contactNumber: newClient.contactNumber,
-                address: newClient.address
-            }
-        });
-    } catch (error) {
-        console.error('Error creating client:', error);
-        res.status(500).json({ error: 'Failed to create client' });
+        res.status(201).json(client);
+    } catch (err) {
+        res.status(400).json({ error: 'Error creating client' });
     }
 });
 
 // Update client (admin only)
 router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const { companyName, phone, address, suburb, postcode, status } = req.body;
-        
-        // Check if client exists
-        const client = await User.findOne({ _id: req.params.id, role: 'client' });
+        const client = await Client.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true }
+        );
         if (!client) {
             return res.status(404).json({ error: 'Client not found' });
         }
         
-        // Update client
-        client.companyName = companyName || client.companyName;
-        client.contactNumber = phone || client.contactNumber;
-        client.address = {
-            street: address || (client.address ? client.address.street : ''),
-            city: suburb || (client.address ? client.address.city : ''),
-            zipCode: postcode || (client.address ? client.address.zipCode : ''),
-            country: 'Australia'
-        };
-        client.status = status || client.status;
-        
-        await client.save();
-        
-        res.json({
-            message: 'Client updated successfully',
-            client: {
-                _id: client._id,
-                companyName: client.companyName,
-                contactNumber: client.contactNumber,
-                address: client.address,
-                status: client.status
-            }
+        // Log the activity
+        const activityLog = new ActivityLog({
+            user: req.user._id,
+            action: 'update',
+            resourceType: 'client',
+            resourceId: client._id,
+            description: client.companyName,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
         });
-    } catch (error) {
-        console.error('Error updating client:', error);
-        res.status(500).json({ error: 'Failed to update client' });
+        await activityLog.save();
+        
+        res.json(client);
+    } catch (err) {
+        res.status(400).json({ error: 'Error updating client' });
     }
 });
 
 // Delete client (admin only)
 router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const client = await User.findOneAndDelete({ _id: req.params.id, role: 'client' });
-        
+        const client = await Client.findByIdAndDelete(req.params.id);
         if (!client) {
             return res.status(404).json({ error: 'Client not found' });
         }
         
+        // Log the activity
+        const activityLog = new ActivityLog({
+            user: req.user._id,
+            action: 'delete',
+            resourceType: 'client',
+            resourceId: client._id,
+            description: client.companyName,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        });
+        await activityLog.save();
+        
         res.json({ message: 'Client deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting client:', error);
-        res.status(500).json({ error: 'Failed to delete client' });
+    } catch (err) {
+        res.status(500).json({ error: 'Error deleting client' });
     }
 });
 
-// Get client's jobsites
+// Get all jobsites for a client
 router.get('/:id/jobsites', authenticateToken, async (req, res) => {
     try {
-        // Check if user is admin or the client themselves
-        if (req.user.role !== 'admin' && req.user._id.toString() !== req.params.id) {
+        const clientId = req.params.id;
+        
+        // Check if user is authorized to view this client's jobsites
+        if (req.user.role !== 'admin' && req.user._id.toString() !== clientId) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
         
-        const jobsites = await Jobsite.find({ client: req.params.id })
-            .populate('supervisors', 'firstName lastName email')
-            .sort({ createdAt: -1 });
+        // Validate client exists
+        const clientExists = await Client.findById(clientId);
+        if (!clientExists) {
+            return res.status(404).json({ error: 'Client not found' });
+        }
         
-        res.json(jobsites);
+        const jobsites = await Jobsite.find({ client: clientId })
+            .populate({
+                path: 'client',
+                select: 'firstName lastName companyName',
+                match: { status: { $ne: 'terminated' } }
+            })
+            .populate({
+                path: 'supervisors',
+                select: 'firstName lastName email',
+                match: { status: { $ne: 'terminated' } }
+            })
+            .sort({ startDate: -1 });
+        
+        // Ensure data is sanitized before sending to client
+        const sanitizedJobsites = jobsites.map(jobsite => {
+            const jobsiteObj = jobsite.toObject();
+            
+            // Handle null client
+            if (!jobsiteObj.client) {
+                jobsiteObj.client = {
+                    _id: clientId,
+                    firstName: clientExists.firstName || 'Unknown',
+                    lastName: clientExists.lastName || 'Client',
+                    companyName: clientExists.companyName
+                };
+            }
+            
+            // Handle null supervisors
+            if (Array.isArray(jobsiteObj.supervisors)) {
+                jobsiteObj.supervisors = jobsiteObj.supervisors.filter(sup => sup !== null);
+            } else {
+                jobsiteObj.supervisors = [];
+            }
+            
+            return jobsiteObj;
+        });
+        
+        res.json(sanitizedJobsites);
     } catch (error) {
         console.error('Error fetching client jobsites:', error);
-        res.status(500).json({ error: 'Failed to fetch jobsites' });
-    }
-});
-
-// Get client's documents
-router.get('/:id/documents', authenticateToken, async (req, res) => {
-    try {
-        // Check if user is admin or the client themselves
-        if (req.user.role !== 'admin' && req.user._id.toString() !== req.params.id) {
-            return res.status(403).json({ error: 'Unauthorized' });
-        }
-        
-        const documents = await Document.find({ client: req.params.id })
-            .populate('uploadedBy', 'firstName lastName')
-            .sort({ uploadDate: -1 });
-        
-        res.json(documents);
-    } catch (error) {
-        console.error('Error fetching client documents:', error);
-        res.status(500).json({ error: 'Failed to fetch documents' });
+        res.status(500).json({ error: 'Failed to fetch client jobsites' });
     }
 });
 

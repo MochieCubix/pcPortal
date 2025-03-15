@@ -1,9 +1,8 @@
 'use client';
 
-import { Fragment, useState } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 interface SupervisorFormData {
     firstName: string;
@@ -15,9 +14,10 @@ interface SupervisorFormData {
 interface SupervisorFormModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onSuccess?: () => void;
 }
 
-export default function SupervisorFormModal({ isOpen, onClose }: SupervisorFormModalProps) {
+export default function SupervisorFormModal({ isOpen, onClose, onSuccess }: SupervisorFormModalProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -49,163 +49,178 @@ export default function SupervisorFormModal({ isOpen, onClose }: SupervisorFormM
                 body: JSON.stringify(formData)
             });
 
-            if (response.status === 401) {
-                localStorage.removeItem('token');
-                router.push('/login');
-                return;
-            }
-
             if (!response.ok) {
-                throw new Error('Failed to create supervisor');
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create supervisor');
             }
 
-            router.refresh(); // Refresh the page data
+            if (onSuccess) {
+                onSuccess();
+            }
             onClose(); // Close the modal
-            setFormData({ // Reset the form
-                firstName: '',
-                lastName: '',
-                email: '',
-                phone: ''
-            });
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to create supervisor');
+            setError(err instanceof Error ? err.message : 'An error occurred');
+            console.error('Error creating supervisor:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    return (
-        <Transition appear show={isOpen} as={Fragment}>
-            <Dialog className="relative z-50" onClose={onClose}>
-                <Transition.Child
-                    as={Fragment}
-                    enter="ease-out duration-300"
-                    enterFrom="opacity-0"
-                    enterTo="opacity-100"
-                    leave="ease-in duration-200"
-                    leaveFrom="opacity-100"
-                    leaveTo="opacity-0"
-                >
-                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
-                </Transition.Child>
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        console.log('Input changed:', name, value);
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
 
-                <div className="fixed inset-0 z-10 overflow-y-auto">
-                    <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                        <Transition.Child
-                            as={Fragment}
-                            enter="ease-out duration-300"
-                            enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                            enterTo="opacity-100 translate-y-0 sm:scale-100"
-                            leave="ease-in duration-200"
-                            leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-                            leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                        >
-                            <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
-                                <div className="absolute right-0 top-0 pr-4 pt-4">
-                                    <button
-                                        type="button"
-                                        className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                        onClick={onClose}
-                                    >
-                                        <span className="sr-only">Close</span>
-                                        <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-                                    </button>
+    // Direct rendering instead of using BaseModal
+    if (!isOpen) return null;
+
+    return (
+        <div 
+            className="fixed inset-0 z-[70] overflow-y-auto" 
+            aria-labelledby="modal-title" 
+            role="dialog" 
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                {/* Background overlay */}
+                <div 
+                    className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                    aria-hidden="true"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                    }}
+                ></div>
+
+                {/* This element is to trick the browser into centering the modal contents. */}
+                <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                {/* Modal panel */}
+                <div 
+                    className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                Add New Supervisor
+                            </h3>
+                            <button
+                                type="button"
+                                className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClose();
+                                }}
+                            >
+                                <span className="sr-only">Close</span>
+                                <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={(e) => {
+                            e.stopPropagation();
+                            handleSubmit(e);
+                        }} className="mt-4 space-y-6">
+                            {error && (
+                                <div className="rounded-md bg-red-50 p-4">
+                                    <div className="text-sm text-red-700">{error}</div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-4">
+                                <div>
+                                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                                        First Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="firstName"
+                                        id="firstName"
+                                        value={formData.firstName}
+                                        onChange={handleChange}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                        required
+                                    />
                                 </div>
 
                                 <div>
-                                    <Dialog.Title>
-                                        <h3 className="text-xl font-semibold leading-6 text-gray-900 mb-6">Add New Supervisor</h3>
-                                    </Dialog.Title>
-
-                                    <div className="mt-4">
-                                        <form onSubmit={handleSubmit} className="space-y-6">
-                                            {error && (
-                                                <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
-                                                    <p className="text-sm text-red-700">{error}</p>
-                                                </div>
-                                            )}
-
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                                                        First Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        id="firstName"
-                                                        value={formData.firstName}
-                                                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                                                        Last Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        id="lastName"
-                                                        value={formData.lastName}
-                                                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3"
-                                                        required
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Email
-                                                </label>
-                                                <input
-                                                    type="email"
-                                                    id="email"
-                                                    value={formData.email}
-                                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3"
-                                                    required
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Phone Number
-                                                </label>
-                                                <input
-                                                    type="tel"
-                                                    id="phone"
-                                                    value={formData.phone}
-                                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 px-3"
-                                                    required
-                                                />
-                                            </div>
-
-                                            <div className="mt-8 flex justify-end">
-                                                <button
-                                                    type="button"
-                                                    className="mr-3 inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                                    onClick={onClose}
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    type="submit"
-                                                    className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                                    disabled={loading}
-                                                >
-                                                    {loading ? 'Creating...' : 'Create Supervisor'}
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
+                                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                                        Last Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="lastName"
+                                        id="lastName"
+                                        value={formData.lastName}
+                                        onChange={handleChange}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                        required
+                                    />
                                 </div>
-                            </Dialog.Panel>
-                        </Transition.Child>
+                            </div>
+
+                            <div>
+                                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                                    Email Address
+                                </label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    id="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                                    Phone Number
+                                </label>
+                                <input
+                                    type="tel"
+                                    name="phone"
+                                    id="phone"
+                                    value={formData.phone}
+                                    onChange={handleChange}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                />
+                            </div>
+
+                            <div className="flex justify-end space-x-3">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onClose();
+                                    }}
+                                    className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                >
+                                    {loading ? 'Saving...' : 'Create Supervisor'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
-            </Dialog>
-        </Transition>
+            </div>
+        </div>
     );
 } 

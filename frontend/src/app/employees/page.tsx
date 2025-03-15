@@ -6,6 +6,7 @@ import ProtectedLayout from '@/components/ProtectedLayout';
 import ClientLayout from '@/components/Layouts/ClientLayout';
 import Link from 'next/link';
 import EmployeeFormModal from '@/components/EmployeeFormModal';
+import { EyeIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 interface Employee {
     _id: string;
@@ -56,12 +57,12 @@ export default function EmployeesPage() {
             }
         };
 
-        if (user?.role === 'admin') {
+        if (user?.role === 'admin' || user?.role === 'supervisor') {
             fetchEmployees();
         }
     }, [user]);
 
-    if (user?.role !== 'admin') {
+    if (user?.role !== 'admin' && user?.role !== 'supervisor') {
         return (
             <ProtectedLayout>
                 <ClientLayout>
@@ -89,12 +90,14 @@ export default function EmployeesPage() {
                                 <h1 className="text-3xl font-bold leading-tight text-gray-900">
                                     Manage Employees
                                 </h1>
-                                <button 
-                                    onClick={() => setIsModalOpen(true)}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
-                                >
-                                    Add New Employee
-                                </button>
+                                {user?.role === 'admin' && (
+                                    <button 
+                                        onClick={() => setIsModalOpen(true)}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                                    >
+                                        Add New Employee
+                                    </button>
+                                )}
                             </div>
                         </header>
                         <main>
@@ -169,22 +172,37 @@ export default function EmployeesPage() {
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                    <Link href={`/employees/${employee._id}`} className="text-blue-600 hover:text-blue-900 mr-4">
-                                                                        View
-                                                                    </Link>
-                                                                    <Link href={`/employees/edit/${employee._id}`} className="text-indigo-600 hover:text-indigo-900 mr-4">
-                                                                        Edit
-                                                                    </Link>
-                                                                    <button
-                                                                        className="text-red-600 hover:text-red-900"
-                                                                        onClick={() => {
-                                                                            if (window.confirm('Are you sure you want to delete this employee?')) {
-                                                                                // Handle delete
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        Delete
-                                                                    </button>
+                                                                    <div className="flex justify-end space-x-3">
+                                                                        <Link 
+                                                                            href={`/employees/${employee._id}`} 
+                                                                            className="text-blue-600 hover:text-blue-900"
+                                                                            title="View"
+                                                                        >
+                                                                            <EyeIcon className="h-5 w-5" />
+                                                                        </Link>
+                                                                        {user?.role === 'admin' && (
+                                                                            <>
+                                                                                <Link 
+                                                                                    href={`/employees/edit/${employee._id}`} 
+                                                                                    className="text-indigo-600 hover:text-indigo-900"
+                                                                                    title="Edit"
+                                                                                >
+                                                                                    <PencilIcon className="h-5 w-5" />
+                                                                                </Link>
+                                                                                <button
+                                                                                    className="text-red-600 hover:text-red-900"
+                                                                                    title="Delete"
+                                                                                    onClick={() => {
+                                                                                        if (window.confirm('Are you sure you want to delete this employee?')) {
+                                                                                            // Handle delete
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    <TrashIcon className="h-5 w-5" />
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         ))
@@ -198,13 +216,15 @@ export default function EmployeesPage() {
                         </main>
                     </div>
                 </div>
-            </ClientLayout>
 
-            {/* Employee Form Modal */}
-            <EmployeeFormModal 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-            />
+                {/* Employee Form Modal */}
+                {user?.role === 'admin' && (
+                    <EmployeeFormModal 
+                        isOpen={isModalOpen}
+                        onClose={() => setIsModalOpen(false)}
+                    />
+                )}
+            </ClientLayout>
         </ProtectedLayout>
     );
 } 

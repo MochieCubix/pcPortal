@@ -70,6 +70,22 @@ const userSchema = new mongoose.Schema({
         zipCode: String,
         country: String
     },
+    paymentTerms: {
+        days: {
+            type: Number,
+            default: 30, // Default to 30 days
+            min: 0
+        },
+        type: {
+            type: String,
+            enum: ['days', 'EOM'], // End of Month or specific days
+            default: 'days'
+        },
+        description: {
+            type: String,
+            trim: true
+        }
+    },
     isEmailVerified: {
         type: Boolean,
         default: false

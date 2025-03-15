@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import UploadInvoicesModal from './UploadInvoicesModal';
+import CreateInvoiceModal from './CreateInvoiceModal';
 
 interface Invoice {
     _id: string;
@@ -45,44 +47,45 @@ export default function InvoiceManagement({ clientId }: InvoiceManagementProps) 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showUploadModal, setShowUploadModal] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const headers = {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                };
+    const fetchData = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
 
-                // Fetch invoices
-                const invoicesResponse = await fetch(`http://localhost:5000/api/invoices/client/${clientId}`, {
-                    headers
-                });
-                
-                if (invoicesResponse.ok) {
-                    const invoicesData = await invoicesResponse.json();
-                    setInvoices(invoicesData);
-                }
-
-                // Fetch jobsites
-                const jobsitesResponse = await fetch(`http://localhost:5000/api/jobsites/client/${clientId}`, {
-                    headers
-                });
-
-                if (jobsitesResponse.ok) {
-                    const jobsitesData = await jobsitesResponse.json();
-                    setJobsites(jobsitesData);
-                }
-            } catch (err) {
-                setError('Failed to fetch data');
-                console.error('Error fetching data:', err);
-            } finally {
-                setLoading(false);
+            // Fetch invoices
+            const invoicesResponse = await fetch(`http://localhost:5000/api/invoices/client/${clientId}`, {
+                headers
+            });
+            
+            if (invoicesResponse.ok) {
+                const invoicesData = await invoicesResponse.json();
+                setInvoices(invoicesData);
             }
-        };
 
+            // Fetch jobsites
+            const jobsitesResponse = await fetch(`http://localhost:5000/api/jobsites/client/${clientId}`, {
+                headers
+            });
+
+            if (jobsitesResponse.ok) {
+                const jobsitesData = await jobsitesResponse.json();
+                setJobsites(jobsitesData);
+            }
+        } catch (err) {
+            setError('Failed to fetch data');
+            console.error('Error fetching data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchData();
     }, [clientId]);
 
@@ -157,12 +160,20 @@ export default function InvoiceManagement({ clientId }: InvoiceManagementProps) 
         <div className="bg-white shadow-sm rounded-lg">
             <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
                 <h3 className="text-lg leading-6 font-medium text-gray-900">Invoices</h3>
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                    Create Invoice
-                </button>
+                <div className="flex space-x-3">
+                    <button
+                        onClick={() => setShowUploadModal(true)}
+                        className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                        Upload Invoices
+                    </button>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                        Create Invoice
+                    </button>
+                </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -241,11 +252,27 @@ export default function InvoiceManagement({ clientId }: InvoiceManagementProps) 
                 </table>
             </div>
 
-            {/* Create Invoice Modal will be implemented separately */}
             {showCreateModal && (
-                <div className="fixed z-10 inset-0 overflow-y-auto">
-                    {/* Modal implementation will be added */}
-                </div>
+                <CreateInvoiceModal
+                    clientId={clientId}
+                    jobsites={jobsites}
+                    onClose={() => setShowCreateModal(false)}
+                    onSuccess={() => {
+                        setShowCreateModal(false);
+                        fetchData();
+                    }}
+                />
+            )}
+
+            {showUploadModal && (
+                <UploadInvoicesModal
+                    clientId={clientId}
+                    onClose={() => setShowUploadModal(false)}
+                    onSuccess={() => {
+                        setShowUploadModal(false);
+                        fetchData();
+                    }}
+                />
             )}
 
             {/* View Invoice Modal will be implemented separately */}

@@ -21,6 +21,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const settingRoutes = require('./routes/settings');
 const notificationRoutes = require('./routes/notifications');
 const invoiceRoutes = require('./routes/invoices');
+const activityRoutes = require('./routes/activity');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/invoices', invoiceRoutes);
+app.use('/api/activity', activityRoutes);
 
 // Direct upload endpoint for testing
 const directUpload = multer({ dest: 'uploads/' });
@@ -87,9 +89,12 @@ app.get('/api/debug/routes', (req, res) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('Connected to MongoDB'))
-    .catch(err => console.error('Could not connect to MongoDB:', err));
+mongoose.connect(config.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+})
+.then(() => console.log('Connected to MongoDB'))
+.catch(err => console.error('Could not connect to MongoDB:', err));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

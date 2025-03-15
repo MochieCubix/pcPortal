@@ -29,6 +29,7 @@ export default function CreateInvoiceModal({ clientId, jobsites, onClose, onSucc
     const [jobsiteId, setJobsiteId] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [notes, setNotes] = useState('');
+    const [status, setStatus] = useState('pending');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -64,6 +65,15 @@ export default function CreateInvoiceModal({ clientId, jobsites, onClose, onSucc
         return items.reduce((sum, item) => sum + item.amount, 0);
     };
 
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-AU', {
+            style: 'currency',
+            currency: 'AUD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -83,6 +93,7 @@ export default function CreateInvoiceModal({ clientId, jobsites, onClose, onSucc
                     items,
                     dueDate,
                     notes,
+                    status,
                     total: calculateTotal()
                 })
             });
@@ -141,6 +152,22 @@ export default function CreateInvoiceModal({ clientId, jobsites, onClose, onSucc
                     </div>
 
                     <div>
+                        <label className="block text-sm font-medium text-gray-700">Status</label>
+                        <select
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        >
+                            <option value="pending">Pending</option>
+                            <option value="draft">Draft</option>
+                            <option value="sent">Sent</option>
+                            <option value="paid">Paid</option>
+                            <option value="overdue">Overdue</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+
+                    <div>
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="text-lg font-medium text-gray-900">Items</h4>
                             <button
@@ -184,7 +211,7 @@ export default function CreateInvoiceModal({ clientId, jobsites, onClose, onSucc
                                             step="0.01"
                                             value={item.rate}
                                             onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-right"
                                             required
                                         />
                                     </div>
@@ -194,7 +221,7 @@ export default function CreateInvoiceModal({ clientId, jobsites, onClose, onSucc
                                             type="number"
                                             value={item.amount}
                                             readOnly
-                                            className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm"
+                                            className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm text-right"
                                         />
                                     </div>
                                     {items.length > 1 && (
@@ -212,7 +239,7 @@ export default function CreateInvoiceModal({ clientId, jobsites, onClose, onSucc
 
                         <div className="mt-4 text-right">
                             <p className="text-lg font-medium">
-                                Total: ${calculateTotal().toFixed(2)}
+                                Total: {formatCurrency(calculateTotal())}
                             </p>
                         </div>
                     </div>

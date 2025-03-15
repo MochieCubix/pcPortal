@@ -2,6 +2,8 @@
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Providers as ThemeProviders } from "@/app/providers";
+import { ModalProvider } from '@/contexts/ModalContext';
+import { EmailProvider } from '@/contexts/EmailContext';
 
 export default function Providers({
     children,
@@ -11,7 +13,11 @@ export default function Providers({
     return (
         <AuthProvider>
             <ThemeProviders>
-                {children}
+                <ModalProvider>
+                    <EmailProvider>
+                        {children}
+                    </EmailProvider>
+                </ModalProvider>
             </ThemeProviders>
         </AuthProvider>
     );

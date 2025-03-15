@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ChevronUpIcon, Bars3Icon } from '@heroicons/react/24/outline';
+import Image from 'next/image';
 
 interface SidebarItem {
   title: string;
@@ -13,14 +15,52 @@ interface SidebarItem {
   children?: SidebarItem[];
 }
 
+// Create a context to manage sidebar state globally
+export const SidebarContext = React.createContext<{
+  sidebarOpen: boolean;
+  setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  sidebarExpanded: boolean;
+  setSidebarExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+}>({
+  sidebarOpen: true,
+  setSidebarOpen: () => {},
+  sidebarExpanded: true,
+  setSidebarExpanded: () => {},
+});
+
 export function Sidebar() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  
+  // Default to open for admin users, closed for others
+  const [sidebarOpen, setSidebarOpen] = useState(isAdmin);
+  
+  // Track if sidebar is expanded (full width) or collapsed (icons only)
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  
+  // Track expanded menu items
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
+    'Management': true // Keep Management menu open by default
+  });
+  
   const trigger = useRef<any>(null);
   const sidebar = useRef<any>(null);
   const pathname = usePathname();
-  const { user } = useAuth();
 
-  // Close sidebar when clicking outside
+  // Update sidebar state when user role changes
+  useEffect(() => {
+    if (isAdmin) {
+      setSidebarOpen(true);
+    }
+    
+    // Initialize Management menu as open
+    setExpandedItems(prev => ({
+      ...prev,
+      'Management': true
+    }));
+  }, [isAdmin]);
+
+  // Close sidebar when clicking outside on mobile
   useEffect(() => {
     const clickHandler = ({ target }: MouseEvent) => {
       if (!sidebar.current || !trigger.current) return;
@@ -36,6 +76,26 @@ export function Sidebar() {
     return () => document.removeEventListener('click', clickHandler);
   });
 
+  // Store sidebar state in localStorage
+  useEffect(() => {
+    const storedSidebarExpanded = localStorage.getItem('sidebar-expanded');
+    setSidebarExpanded(
+      storedSidebarExpanded === null ? true : storedSidebarExpanded === 'true'
+    );
+  }, []);
+
+  // Update localStorage when sidebar expanded state changes
+  useEffect(() => {
+    localStorage.setItem('sidebar-expanded', sidebarExpanded.toString());
+  }, [sidebarExpanded]);
+
+  const toggleMenuItem = (title: string) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [title]: !prev[title]
+    }));
+  };
+
   const sidebarItems: SidebarItem[] = [
     // Common items for all users
     {
@@ -49,22 +109,22 @@ export function Sidebar() {
       path: '/dashboard',
       role: 'all'
     },
-    // Admin Management Section
+    // Management section - admin only
     {
       title: 'Management',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       ),
-      path: '/management',
+      path: '#',
       role: 'admin',
       children: [
         {
           title: 'Clients',
           icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
                     d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
@@ -73,31 +133,9 @@ export function Sidebar() {
           role: 'admin'
         },
         {
-          title: 'Employees',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          ),
-          path: '/employees',
-          role: 'admin'
-        },
-        {
-          title: 'Supervisors',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          ),
-          path: '/supervisors',
-          role: 'admin'
-        },
-        {
           title: 'Jobsites',
           icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
                     d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
@@ -106,272 +144,312 @@ export function Sidebar() {
           role: 'admin'
         },
         {
-          title: 'Positions',
+          title: 'Document Processing',
           icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          ),
-          path: '/positions',
-          role: 'admin'
-        }
-      ]
-    },
-    // Client Section
-    {
-      title: 'Client Portal',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-      ),
-      path: '/client',
-      role: 'client',
-      children: [
-        {
-          title: 'My Jobsites',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          ),
-          path: '/client/jobsites',
-          role: 'client'
-        },
-        {
-          title: 'Documents',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           ),
-          path: '/client/documents',
-          role: 'client'
+          path: '/textract',
+          role: 'admin'
         },
         {
-          title: 'Invoices',
+          title: 'Supervisors',
           icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          ),
+          path: '/supervisors',
+          role: 'admin'
+        },
+        {
+          title: 'Employees',
+          icon: (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ),
+          path: '/employees',
+          role: 'admin'
+        }
+      ]
+    },
+    // Invoices - admin and client
+    {
+      title: 'Invoices',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      path: '/invoices',
+      role: 'all'
+    },
+    // Examples section for design ideas
+    {
+      title: 'Examples',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+        </svg>
+      ),
+      path: '#',
+      role: 'all',
+      children: [
+        {
+          title: 'Dashboard Examples',
+          icon: (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          ),
+          path: '/examples/dashboard',
+          role: 'all'
+        },
+        {
+          title: 'Form Examples',
+          icon: (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
                     d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           ),
-          path: '/client/invoices',
-          role: 'client'
-        }
-      ]
-    },
-    // Supervisor Section
-    {
-      title: 'Supervisor Portal',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-      ),
-      path: '/supervisor',
-      role: 'supervisor',
-      children: [
-        {
-          title: 'My Jobsites',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          ),
-          path: '/supervisor/jobsites',
-          role: 'supervisor'
+          path: '/examples/forms',
+          role: 'all'
         },
         {
-          title: 'My Team',
+          title: 'Table Examples',
           icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           ),
-          path: '/supervisor/team',
-          role: 'supervisor'
-        },
-        {
-          title: 'Timesheets',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-          ),
-          path: '/supervisor/timesheets',
-          role: 'supervisor'
+          path: '/examples/tables',
+          role: 'all'
         }
       ]
-    },
-    // Employee Section
-    {
-      title: 'Employee Portal',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-      ),
-      path: '/employee',
-      role: 'employee',
-      children: [
-        {
-          title: 'My Jobsites',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          ),
-          path: '/employee/jobsites',
-          role: 'employee'
-        },
-        {
-          title: 'Timesheets',
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-          path: '/employee/timesheets',
-          role: 'employee'
-        }
-      ]
-    },
-    // Settings for all users
-    {
-      title: 'Settings',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
-      path: '/settings',
-      role: 'all'
     }
   ];
-
-  // Function to check if a menu item should be shown based on user role
-  const shouldShowMenuItem = (item: SidebarItem) => {
-    if (!user) return false;
-    if (item.role === 'all') return true;
-    if (user.role === 'admin') return true; // Admin can see everything
-    return user.role === item.role;
-  };
-
-  // Function to check if a menu item is active
-  const isMenuItemActive = (item: SidebarItem) => {
-    if (pathname === item.path) return true;
-    if (item.children) {
-      return item.children.some(child => pathname === child.path || pathname.startsWith(child.path + '/'));
-    }
-    return pathname.startsWith(item.path + '/');
-  };
 
   return (
     <aside
       ref={sidebar}
-      className={`absolute left-0 top-0 z-9999 flex h-screen w-72.5 flex-col overflow-y-hidden bg-black duration-300 ease-linear dark:bg-boxdark lg:static lg:translate-x-0 ${
+      className={`absolute left-0 top-0 z-9999 flex h-screen w-72 flex-col overflow-y-hidden bg-black duration-300 ease-linear dark:bg-boxdark lg:static lg:translate-x-0 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}
+      } ${sidebarExpanded ? 'lg:w-72' : 'lg:w-20'}`}
     >
+      {/* SIDEBAR HEADER */}
       <div className="flex items-center justify-between gap-2 px-6 py-5.5 lg:py-6.5">
-        <Link href="/" className="flex items-center">
-          <span className="ml-2 text-xl font-bold text-white">PC Portal</span>
-        </Link>
-        <button
-          ref={trigger}
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          aria-controls="sidebar"
-          aria-expanded={sidebarOpen}
-          className="block lg:hidden"
-        >
-          <svg
-            className="fill-current"
-            width="20"
-            height="18"
-            viewBox="0 0 20 18"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M19 8.175H2.98748L9.36248 1.6875C9.69998 1.35 9.69998 0.825 9.36248 0.4875C9.02498 0.15 8.49998 0.15 8.16248 0.4875L0.399976 8.3625C0.0624756 8.7 0.0624756 9.225 0.399976 9.5625L8.16248 17.4375C8.31248 17.5875 8.53748 17.7 8.76248 17.7C8.98748 17.7 9.21248 17.625 9.36248 17.4375C9.69998 17.1 9.69998 16.575 9.36248 16.2375L2.98748 9.75H19C19.45 9.75 19.825 9.375 19.825 8.925C19.825 8.475 19.45 8.175 19 8.175Z"
-              fill=""
-            />
-          </svg>
-        </button>
-      </div>
-
-      <nav className="mt-5 py-4 px-4 lg:mt-9 lg:px-6">
-        <div>
-          <ul className="mb-6 flex flex-col gap-1.5">
-            {sidebarItems.map((item) => 
-              shouldShowMenuItem(item) && (
-                <li key={item.path}>
-                  {item.children ? (
-                    <div>
-                      <button
-                        onClick={() => {
-                          const isOpen = sidebarOpen;
-                          setSidebarOpen(!isOpen);
-                        }}
-                        className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                          isMenuItemActive(item) && 'bg-graydark dark:bg-meta-4'
-                        }`}
-                      >
-                        {item.icon}
-                        <span>{item.title}</span>
-                      </button>
-                      {sidebarOpen && (
-                        <ul className="mt-4 mb-5.5 flex flex-col gap-2.5 pl-7.5">
-                          {item.children.map((child) =>
-                            shouldShowMenuItem(child) && (
-                              <li key={child.path}>
-                                <Link
-                                  href={child.path}
-                                  className={`group relative flex items-center gap-2.5 rounded-md px-4 font-medium text-bodydark2 duration-300 ease-in-out hover:text-white ${
-                                    pathname === child.path && 'text-white'
-                                  }`}
-                                >
-                                  {child.icon}
-                                  <span>{child.title}</span>
-                                </Link>
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  ) : (
-                    <Link
-                      href={item.path}
-                      className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                        pathname === item.path && 'bg-graydark dark:bg-meta-4'
-                      }`}
-                    >
-                      {item.icon}
-                      <span>{item.title}</span>
-                    </Link>
-                  )}
-                </li>
-              )
+        <Link href="/">
+          <div className={`flex items-center gap-2 ${!sidebarExpanded && 'lg:justify-center'}`}>
+            {sidebarExpanded ? (
+              <div className="h-10 relative w-40 flex items-center">
+                <Image 
+                  src="/assets/logos/px.svg" 
+                  alt="PC Portal Logo" 
+                  width={160} 
+                  height={40} 
+                  className="object-contain"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = '<div class="h-10 w-40 bg-blue-600 rounded-md flex items-center justify-center text-white font-bold text-xl">PC Portal</div>';
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="h-10 w-10 relative flex items-center justify-center">
+                <Image 
+                  src="/assets/logos/px.svg" 
+                  alt="PC" 
+                  width={40} 
+                  height={40} 
+                  className="object-contain p-1"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = '<div class="h-10 w-10 bg-blue-600 rounded-md flex items-center justify-center text-white font-bold text-xl">PC</div>';
+                    }
+                  }}
+                />
+              </div>
             )}
-          </ul>
+          </div>
+        </Link>
+
+        {/* Toggle button for expanded/collapsed state */}
+        <div className="flex items-center">
+          <button
+            className={`hidden lg:block text-white hover:text-gray-300`}
+            onClick={() => setSidebarExpanded(!sidebarExpanded)}
+          >
+            {sidebarExpanded ? (
+              <ChevronLeftIcon className="h-6 w-6" />
+            ) : (
+              <ChevronRightIcon className="h-6 w-6" />
+            )}
+          </button>
+
+          <button
+            ref={trigger}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-controls="sidebar"
+            aria-expanded={sidebarOpen}
+            className="block lg:hidden text-white ml-2"
+          >
+            <Bars3Icon className="h-6 w-6" />
+          </button>
         </div>
-      </nav>
+      </div>
+      {/* SIDEBAR HEADER */}
+
+      <div className="flex flex-col justify-between h-[calc(100%-60px)]">
+        {/* Sidebar Menu */}
+        <div className="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
+          <nav className={`mt-5 px-4 py-4 lg:mt-9 lg:px-6 ${!sidebarExpanded && 'lg:px-2'}`}>
+            <div>
+              <ul className="mb-6 flex flex-col gap-1.5">
+                {/* Menu Items */}
+                {sidebarItems.map((item, index) => {
+                  if (!shouldShowMenuItem(item)) return null;
+
+                  // Check if item has children
+                  const hasChildren = item.children && item.children.length > 0;
+                  const isExpanded = expandedItems[item.title] || false;
+
+                  return (
+                    <li key={index}>
+                      {hasChildren ? (
+                        // Item with submenu
+                        <div>
+                          <button
+                            onClick={() => toggleMenuItem(item.title)}
+                            className={`group relative flex items-center justify-between gap-2.5 rounded-sm px-4 py-2 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                              isMenuItemActive(item) && 'bg-graydark dark:bg-meta-4'
+                            } ${!sidebarExpanded && 'lg:justify-center lg:px-2'}`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              {item.icon}
+                              {(sidebarExpanded || !sidebar) && <span>{item.title}</span>}
+                            </div>
+                            
+                            {(sidebarExpanded || !sidebar) && (
+                              isExpanded ? (
+                                <ChevronUpIcon className="h-4 w-4" />
+                              ) : (
+                                <ChevronDownIcon className="h-4 w-4" />
+                              )
+                            )}
+                            
+                            {/* Show tooltip when sidebar is collapsed */}
+                            {!sidebarExpanded && (
+                              <div className="absolute left-full top-1/2 z-20 ml-4 -translate-y-1/2 whitespace-nowrap rounded bg-black px-2 py-1 text-xs font-semibold text-white opacity-0 group-hover:opacity-100">
+                                {item.title}
+                              </div>
+                            )}
+                          </button>
+                          
+                          {/* Submenu */}
+                          {isExpanded && (sidebarExpanded || !sidebar) && (
+                            <ul className="mt-2 mb-4 flex flex-col gap-2 pl-10">
+                              {item.children?.map((child, childIndex) => {
+                                if (!shouldShowMenuItem(child)) return null;
+                                
+                                return (
+                                  <li key={childIndex}>
+                                    <Link
+                                      href={child.path}
+                                      className={`group relative flex items-center gap-2.5 rounded-md px-4 py-2 font-medium text-bodydark2 duration-300 ease-in-out hover:text-white ${
+                                        pathname === child.path && 'text-white'
+                                      }`}
+                                    >
+                                      {child.icon}
+                                      <span>{child.title}</span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      ) : (
+                        // Regular menu item
+                        <Link
+                          href={item.path}
+                          className={`group relative flex items-center gap-2.5 rounded-sm px-4 py-2 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                            isMenuItemActive(item) && 'bg-graydark dark:bg-meta-4'
+                          } ${!sidebarExpanded && 'lg:justify-center lg:px-2'}`}
+                        >
+                          {item.icon}
+                          {(sidebarExpanded || !sidebar) && <span>{item.title}</span>}
+                          
+                          {/* Show tooltip when sidebar is collapsed */}
+                          {!sidebarExpanded && (
+                            <div className="absolute left-full top-1/2 z-20 ml-4 -translate-y-1/2 whitespace-nowrap rounded bg-black px-2 py-1 text-xs font-semibold text-white opacity-0 group-hover:opacity-100">
+                              {item.title}
+                            </div>
+                          )}
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </nav>
+        </div>
+
+        {/* User info at bottom of sidebar */}
+        {user && (
+          <div className={`mt-auto px-6 py-4 border-t border-gray-700 ${!sidebarExpanded && 'lg:px-2'}`}>
+            <div className={`flex items-center ${!sidebarExpanded && 'lg:justify-center'}`}>
+              <div className="flex-shrink-0">
+                <div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-semibold text-lg">
+                  {user.firstName?.charAt(0) || 'U'}
+                </div>
+              </div>
+              {(sidebarExpanded || !sidebar) && (
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-white">
+                    {user.firstName} {user.lastName}
+                  </p>
+                  <p className="text-xs font-medium text-gray-400 capitalize">
+                    {user.role || 'User'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </aside>
   );
+
+  function shouldShowMenuItem(item: SidebarItem) {
+    if (item.role === 'all') return true;
+    if (!user) return false;
+    if (item.role === user.role) return true;
+    if (user.role === 'admin') return true; // Admin can see all items
+    return false;
+  }
+
+  function isMenuItemActive(item: SidebarItem) {
+    return pathname === item.path || 
+           (item.children?.some(child => pathname === child.path) ?? false);
+  }
 } 

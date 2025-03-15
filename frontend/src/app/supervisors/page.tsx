@@ -6,6 +6,7 @@ import ProtectedLayout from '@/components/ProtectedLayout';
 import ClientLayout from '@/components/Layouts/ClientLayout';
 import Link from 'next/link';
 import SupervisorFormModal from '@/components/SupervisorFormModal';
+import { EyeIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 interface Supervisor {
     _id: string;
@@ -162,22 +163,33 @@ export default function SupervisorsPage() {
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                    <Link href={`/supervisors/${supervisor._id}`} className="text-blue-600 hover:text-blue-900 mr-4">
-                                                                        View
-                                                                    </Link>
-                                                                    <Link href={`/supervisors/edit/${supervisor._id}`} className="text-indigo-600 hover:text-indigo-900 mr-4">
-                                                                        Edit
-                                                                    </Link>
-                                                                    <button
-                                                                        className="text-red-600 hover:text-red-900"
-                                                                        onClick={() => {
-                                                                            if (window.confirm('Are you sure you want to delete this supervisor?')) {
-                                                                                // Handle delete
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        Delete
-                                                                    </button>
+                                                                    <div className="flex justify-end space-x-3">
+                                                                        <Link 
+                                                                            href={`/supervisors/${supervisor._id}`} 
+                                                                            className="text-blue-600 hover:text-blue-900"
+                                                                            title="View"
+                                                                        >
+                                                                            <EyeIcon className="h-5 w-5" />
+                                                                        </Link>
+                                                                        <Link 
+                                                                            href={`/supervisors/edit/${supervisor._id}`} 
+                                                                            className="text-indigo-600 hover:text-indigo-900"
+                                                                            title="Edit"
+                                                                        >
+                                                                            <PencilIcon className="h-5 w-5" />
+                                                                        </Link>
+                                                                        <button
+                                                                            className="text-red-600 hover:text-red-900"
+                                                                            title="Delete"
+                                                                            onClick={() => {
+                                                                                if (window.confirm('Are you sure you want to delete this supervisor?')) {
+                                                                                    // Handle delete
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <TrashIcon className="h-5 w-5" />
+                                                                        </button>
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         ))

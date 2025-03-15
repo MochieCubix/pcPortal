@@ -1,45 +1,105 @@
 'use client';
 
-import { Fragment, useState, useEffect } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import BaseModal from './modals/BaseModal';
+import { toast } from 'react-hot-toast';
 
 interface Client {
     _id: string;
     companyName: string;
 }
 
+interface Jobsite {
+    _id: string;
+    name: string;
+    location?: {
+        address?: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zipCode?: string;
+        }
+    };
+    status?: string;
+    startDate?: string;
+    client?: {
+        _id?: string;
+    };
+}
+
 interface JobsiteFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    clientId?: string; // Make clientId optional
+    clientId?: string;
+    jobsiteId?: string;
+    jobsiteData?: Jobsite;
     onSuccess?: () => void;
 }
 
-export default function JobsiteFormModal({ isOpen, onClose, clientId, onSuccess }: JobsiteFormModalProps) {
+export default function JobsiteFormModal({ isOpen, onClose, clientId, jobsiteId, jobsiteData, onSuccess }: JobsiteFormModalProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [name, setName] = useState('');
-    const [address, setAddress] = useState('');
+    const [street, setStreet] = useState('');
+    const [city, setCity] = useState('');
+    const [state, setState] = useState('');
+    const [zipCode, setZipCode] = useState('');
     const [status, setStatus] = useState<'active' | 'inactive'>('active');
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]); // Today's date in YYYY-MM-DD format
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedClientId, setSelectedClientId] = useState<string>('');
+    const [originalClientId, setOriginalClientId] = useState<string>('');
     const [clients, setClients] = useState<Client[]>([]);
     const [loadingClients, setLoadingClients] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [showConfirmClientChange, setShowConfirmClientChange] = useState(false);
+    const [newClientId, setNewClientId] = useState<string>('');
 
-    // Fetch clients if no clientId is provided
+    // Reset form when modal opens
     useEffect(() => {
-        if (isOpen && !clientId) {
+        if (isOpen) {
+            // Check if we're in edit mode
+            if (jobsiteId && jobsiteData) {
+                setIsEditMode(true);
+                setName(jobsiteData.name || '');
+                setStreet(jobsiteData.location?.address?.street || '');
+                setCity(jobsiteData.location?.address?.city || '');
+                setState(jobsiteData.location?.address?.state || '');
+                setZipCode(jobsiteData.location?.address?.zipCode || '');
+                setStatus((jobsiteData.status as 'active' | 'inactive') || 'active');
+                setStartDate(jobsiteData.startDate || new Date().toISOString().split('T')[0]);
+                
+                // Set client ID from jobsite data or from prop
+                if (jobsiteData.client?._id) {
+                    setSelectedClientId(jobsiteData.client._id);
+                    setOriginalClientId(jobsiteData.client._id);
+                } else if (clientId) {
+                    setSelectedClientId(clientId);
+                    setOriginalClientId(clientId);
+                }
+            } else {
+                // New jobsite mode
+                setIsEditMode(false);
+                setName('');
+                setStreet('');
+                setCity('');
+                setState('');
+                setZipCode('');
+                setStatus('active');
+                setStartDate(new Date().toISOString().split('T')[0]);
+                setError('');
+                if (clientId) {
+                    setSelectedClientId(clientId);
+                    setOriginalClientId(clientId);
+                } else {
+                    setSelectedClientId('');
+                    setOriginalClientId('');
+                }
+            }
+            
+            // Always fetch clients when modal opens
             fetchClients();
         }
-        
-        // Set the selected client if clientId is provided
-        if (clientId) {
-            setSelectedClientId(clientId);
-        } else {
-            setSelectedClientId('');
-        }
-    }, [isOpen, clientId]);
+    }, [isOpen, clientId, jobsiteId, jobsiteData]);
 
     const fetchClients = async () => {
         try {
@@ -64,13 +124,34 @@ export default function JobsiteFormModal({ isOpen, onClose, clientId, onSuccess 
         }
     };
 
+    const handleClientChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newId = e.target.value;
+        
+        // If in edit mode and the client is being changed, show confirmation
+        if (isEditMode && originalClientId && newId !== originalClientId) {
+            setNewClientId(newId);
+            setShowConfirmClientChange(true);
+        } else {
+            setSelectedClientId(newId);
+        }
+    };
+
+    const confirmClientChange = () => {
+        setSelectedClientId(newClientId);
+        setShowConfirmClientChange(false);
+    };
+
+    const cancelClientChange = () => {
+        setShowConfirmClientChange(false);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
 
-        // Validate client selection if no clientId was provided
-        if (!clientId && !selectedClientId) {
+        // Validate client selection for new jobsites
+        if (!selectedClientId) {
             setError('Please select a client');
             setLoading(false);
             return;
@@ -80,220 +161,241 @@ export default function JobsiteFormModal({ isOpen, onClose, clientId, onSuccess 
             const token = localStorage.getItem('token');
             if (!token) {
                 setError('Authentication required');
+                setLoading(false);
                 return;
             }
 
-            // Use the provided clientId or the selected one
-            const effectiveClientId = clientId || selectedClientId;
+            const jobsiteData = {
+                name,
+                location: {
+                    address: {
+                        street,
+                        city,
+                        state,
+                        zipCode
+                    }
+                },
+                status,
+                startDate,
+                client: selectedClientId
+            };
 
-            // Use the correct API endpoint
-            const response = await fetch(`http://localhost:5000/api/jobsites`, {
-                method: 'POST',
+            // Determine if we're creating or updating
+            const url = isEditMode 
+                ? `http://localhost:5000/api/jobsites/${jobsiteId}` 
+                : 'http://localhost:5000/api/jobsites';
+            
+            const method = isEditMode ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method,
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    name,
-                    client: effectiveClientId, // Include client ID in the request body
-                    location: {
-                        address: {
-                            street: address,
-                            country: 'Australia'
-                        }
-                    },
-                    status,
-                    startDate, // Add the required startDate field
-                    description: `Jobsite for client ${effectiveClientId}` // Add a default description
-                })
+                body: JSON.stringify(jobsiteData)
             });
-
-            if (response.status === 401) {
-                setError('Authentication required');
-                return;
-            }
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to create jobsite');
+                throw new Error(errorData.error || 'Failed to save jobsite');
             }
 
-            // Reset form
-            setName('');
-            setAddress('');
-            setStatus('active');
-            setStartDate(new Date().toISOString().split('T')[0]);
-            if (!clientId) {
-                setSelectedClientId('');
-            }
-
-            // Close modal and refresh data
-            onClose();
+            toast.success(`Jobsite ${isEditMode ? 'updated' : 'created'} successfully!`);
+            
             if (onSuccess) {
                 onSuccess();
             }
+            onClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to create jobsite');
+            setError(err instanceof Error ? err.message : 'Failed to save jobsite');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Transition.Root show={isOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-10" onClose={onClose}>
-                <Transition.Child
-                    as={Fragment}
-                    enter="ease-out duration-300"
-                    enterFrom="opacity-0"
-                    enterTo="opacity-100"
-                    leave="ease-in duration-200"
-                    leaveFrom="opacity-100"
-                    leaveTo="opacity-0"
-                >
-                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
-                </Transition.Child>
-
-                <div className="fixed inset-0 z-10 overflow-y-auto">
-                    <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                        <Transition.Child
-                            as={Fragment}
-                            enter="ease-out duration-300"
-                            enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                            enterTo="opacity-100 translate-y-0 sm:scale-100"
-                            leave="ease-in duration-200"
-                            leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-                            leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+        <BaseModal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={isEditMode ? 'Edit Jobsite' : 'Add New Jobsite'}
+            maxWidth="lg"
+            preventOutsideClose={true}
+        >
+            {showConfirmClientChange ? (
+                <div className="p-4 space-y-4">
+                    <div className="text-lg font-medium">Change Client?</div>
+                    <p className="text-gray-700">
+                        Are you sure you want to change the client for this jobsite? This could affect existing invoices and other data.
+                    </p>
+                    <div className="flex justify-end space-x-3 mt-6">
+                        <button
+                            type="button"
+                            onClick={cancelClientChange}
+                            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
-                            <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-                                <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
-                                    <button
-                                        type="button"
-                                        className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                        onClick={onClose}
-                                    >
-                                        <span className="sr-only">Close</span>
-                                        <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-                                    </button>
-                                </div>
-                                <div className="sm:flex sm:items-start">
-                                    <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
-                                        <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
-                                            Add New Jobsite
-                                        </Dialog.Title>
-                                        <div className="mt-4">
-                                            <form onSubmit={handleSubmit} className="space-y-4">
-                                                {error && (
-                                                    <div className="bg-red-50 border-l-4 border-red-400 p-4">
-                                                        <p className="text-sm text-red-700">{error}</p>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* Client selection dropdown (only shown when no clientId is provided) */}
-                                                {!clientId && (
-                                                    <div>
-                                                        <label htmlFor="client" className="block text-sm font-medium text-gray-700">
-                                                            Client
-                                                        </label>
-                                                        <select
-                                                            id="client"
-                                                            value={selectedClientId}
-                                                            onChange={(e) => setSelectedClientId(e.target.value)}
-                                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                                            required
-                                                            disabled={loadingClients}
-                                                        >
-                                                            <option value="">Select a client</option>
-                                                            {clients.map((client) => (
-                                                                <option key={client._id} value={client._id}>
-                                                                    {client.companyName}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        {loadingClients && (
-                                                            <p className="mt-1 text-sm text-gray-500">Loading clients...</p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                
-                                                <div>
-                                                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                                                        Jobsite Name
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        id="name"
-                                                        value={name}
-                                                        onChange={(e) => setName(e.target.value)}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                                                        Address
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        id="address"
-                                                        value={address}
-                                                        onChange={(e) => setAddress(e.target.value)}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                                                        Start Date
-                                                    </label>
-                                                    <input
-                                                        type="date"
-                                                        id="startDate"
-                                                        value={startDate}
-                                                        onChange={(e) => setStartDate(e.target.value)}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                                                        Status
-                                                    </label>
-                                                    <select
-                                                        id="status"
-                                                        value={status}
-                                                        onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')}
-                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                                    >
-                                                        <option value="active">Active</option>
-                                                        <option value="inactive">Inactive</option>
-                                                    </select>
-                                                </div>
-                                                <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
-                                                    <button
-                                                        type="submit"
-                                                        disabled={loading}
-                                                        className="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:col-start-2 disabled:opacity-50"
-                                                    >
-                                                        {loading ? 'Creating...' : 'Create Jobsite'}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={onClose}
-                                                        className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:col-start-1 sm:mt-0"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Dialog.Panel>
-                        </Transition.Child>
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmClientChange}
+                            className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Confirm Change
+                        </button>
                     </div>
                 </div>
-            </Dialog>
-        </Transition.Root>
+            ) : (
+                <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+                    {error && (
+                        <div className="rounded-md bg-red-50 p-4">
+                            <div className="text-sm text-red-700">{error}</div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label htmlFor="client" className="block text-sm font-medium text-gray-700">
+                            Client
+                        </label>
+                        <select
+                            id="client"
+                            value={selectedClientId}
+                            onChange={handleClientChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            required
+                            disabled={loadingClients}
+                        >
+                            <option value="">Select a client</option>
+                            {clients.map((client) => (
+                                <option key={client._id} value={client._id}>
+                                    {client.companyName}
+                                </option>
+                            ))}
+                        </select>
+                        {loadingClients && (
+                            <p className="mt-1 text-sm text-gray-500">Loading clients...</p>
+                        )}
+                    </div>
+
+                    <div>
+                        <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                            Jobsite Name
+                        </label>
+                        <input
+                            type="text"
+                            id="name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            required
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-4">
+                        <div className="sm:col-span-2">
+                            <label htmlFor="street" className="block text-sm font-medium text-gray-700">
+                                Street Address
+                            </label>
+                            <input
+                                type="text"
+                                id="street"
+                                value={street}
+                                onChange={(e) => setStreet(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+                                City
+                            </label>
+                            <input
+                                type="text"
+                                id="city"
+                                value={city}
+                                onChange={(e) => setCity(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="state" className="block text-sm font-medium text-gray-700">
+                                State
+                            </label>
+                            <input
+                                type="text"
+                                id="state"
+                                value={state}
+                                onChange={(e) => setState(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700">
+                                ZIP Code
+                            </label>
+                            <input
+                                type="text"
+                                id="zipCode"
+                                value={zipCode}
+                                onChange={(e) => setZipCode(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                            Status
+                        </label>
+                        <select
+                            id="status"
+                            value={status}
+                            onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        >
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+                            Start Date
+                        </label>
+                        <input
+                            type="date"
+                            id="startDate"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            required
+                        />
+                    </div>
+
+                    <div className="flex justify-end space-x-3">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            {loading ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Jobsite'}
+                        </button>
+                    </div>
+                </form>
+            )}
+        </BaseModal>
     );
 } 

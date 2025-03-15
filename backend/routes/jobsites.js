@@ -4,6 +4,7 @@ const Jobsite = require('../models/Jobsite');
 const User = require('../models/User');
 const Timesheet = require('../models/Timesheet');
 const { authenticateToken, isAdmin, isSupervisorOrAdmin } = require('../middleware/auth');
+const ActivityLog = require('../models/ActivityLog');
 
 // Get all jobsites (admin only)
 router.get('/', authenticateToken, async (req, res) => {
@@ -26,12 +27,43 @@ router.get('/', authenticateToken, async (req, res) => {
         }
         
         const jobsites = await Jobsite.find(query)
-            .populate('client', 'firstName lastName companyName')
-            .populate('supervisors', 'firstName lastName email')
+            .populate({
+                path: 'client',
+                select: 'firstName lastName companyName',
+                match: { status: { $ne: 'terminated' } } // Only include active clients
+            })
+            .populate({
+                path: 'supervisors',
+                select: 'firstName lastName email',
+                match: { status: { $ne: 'terminated' } } // Only include active supervisors
+            })
             .populate('createdBy', 'firstName lastName')
             .sort({ startDate: -1 });
         
-        res.json(jobsites);
+        // Ensure data is sanitized before sending to client
+        const sanitizedJobsites = jobsites.map(jobsite => {
+            const jobsiteObj = jobsite.toObject();
+            
+            // Handle null client
+            if (!jobsiteObj.client) {
+                jobsiteObj.client = {
+                    _id: null,
+                    firstName: 'Unknown',
+                    lastName: 'Client'
+                };
+            }
+            
+            // Handle null supervisors
+            if (Array.isArray(jobsiteObj.supervisors)) {
+                jobsiteObj.supervisors = jobsiteObj.supervisors.filter(sup => sup !== null);
+            } else {
+                jobsiteObj.supervisors = [];
+            }
+            
+            return jobsiteObj;
+        });
+        
+        res.json(sanitizedJobsites);
     } catch (error) {
         console.error('Error fetching jobsites:', error);
         res.status(500).json({ error: 'Failed to fetch jobsites' });
@@ -99,6 +131,18 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         });
         
         await newJobsite.save();
+        
+        // Log the activity
+        const activityLog = new ActivityLog({
+            user: req.user._id,
+            action: 'create',
+            resourceType: 'jobsite',
+            resourceId: newJobsite._id,
+            description: `${req.user.firstName} ${req.user.lastName} created jobsite ${newJobsite.name}`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        });
+        await activityLog.save();
         
         // TODO: Send notifications to client and supervisors
         
@@ -341,6 +385,54 @@ router.post('/:id/notes', authenticateToken, isSupervisorOrAdmin, async (req, re
     } catch (error) {
         console.error('Error adding note to jobsite:', error);
         res.status(500).json({ error: 'Failed to add note' });
+    }
+});
+
+// Assign supervisors to a jobsite (admin only)
+router.put('/:id/supervisors', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { supervisors } = req.body;
+        
+        if (!Array.isArray(supervisors)) {
+            return res.status(400).json({ error: 'Supervisors must be an array of IDs' });
+        }
+        
+        // Filter out any null, undefined, or invalid IDs
+        const validSupervisorIds = supervisors.filter(id => id && typeof id === 'string');
+        
+        // Verify all supervisors exist and have the supervisor role
+        const validatedSupervisors = [];
+        for (const supervisorId of validSupervisorIds) {
+            try {
+                const supervisor = await User.findOne({ _id: supervisorId, role: 'supervisor' });
+                if (supervisor) {
+                    validatedSupervisors.push(supervisorId);
+                }
+            } catch (err) {
+                console.error(`Error validating supervisor ${supervisorId}:`, err);
+                // Continue with other supervisors even if one fails
+            }
+        }
+        
+        const jobsite = await Jobsite.findById(req.params.id);
+        if (!jobsite) {
+            return res.status(404).json({ error: 'Jobsite not found' });
+        }
+        
+        // Update the jobsite with the validated supervisors
+        jobsite.supervisors = validatedSupervisors;
+        await jobsite.save();
+        
+        // Return the updated jobsite
+        const updatedJobsite = await Jobsite.findById(req.params.id)
+            .populate('client', 'firstName lastName companyName')
+            .populate('supervisors', 'firstName lastName email')
+            .populate('createdBy', 'firstName lastName');
+            
+        res.json(updatedJobsite);
+    } catch (error) {
+        console.error('Error assigning supervisors:', error);
+        res.status(500).json({ error: 'Failed to assign supervisors' });
     }
 });
 

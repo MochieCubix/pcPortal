@@ -97,12 +97,24 @@ const logActivity = (action, resourceType) => {
                         }
                     }
                     
+                    // Extract resource name or identifier for description
+                    let description = '';
+                    if (req.body.companyName) {
+                        description = req.body.companyName;
+                    } else if (req.body.name) {
+                        description = req.body.name;
+                    } else if (req.params.id) {
+                        description = req.params.id;
+                    } else {
+                        description = `${resourceType}`;
+                    }
+                    
                     const activityLog = new ActivityLog({
                         user: req.user._id,
                         action,
                         resourceType,
                         resourceId,
-                        description: `${req.user.firstName} ${req.user.lastName} ${action} a ${resourceType}`,
+                        description,
                         ipAddress: req.ip,
                         userAgent: req.headers['user-agent'],
                         metadata: {

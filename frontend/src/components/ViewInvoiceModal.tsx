@@ -1,8 +1,8 @@
 'use client';
 
 import { Fragment } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
-import { XMarkIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon } from '@heroicons/react/24/outline';
+import BaseModal from './modals/BaseModal';
 
 interface ViewInvoiceModalProps {
     isOpen: boolean;
@@ -13,126 +13,133 @@ interface ViewInvoiceModalProps {
         date: string;
         amount: number;
         status: string;
-        fileUrl?: string;
+        items?: Array<{
+            description: string;
+            quantity: number;
+            unitPrice: number;
+        }>;
+        notes?: string;
+        clientName?: string;
+        jobsiteName?: string;
     } | null;
 }
 
 export default function ViewInvoiceModal({ isOpen, onClose, invoice }: ViewInvoiceModalProps) {
+    // If invoice is null, don't render the modal
     if (!invoice) return null;
-
-    const handleDownload = () => {
-        if (invoice.fileUrl) {
-            // Create a link element
-            const link = document.createElement('a');
-            link.href = invoice.fileUrl;
-            link.download = `Invoice-${invoice.invoiceNumber}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
+    
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD'
+        }).format(amount);
     };
 
     return (
-        <Transition.Root show={isOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-10" onClose={onClose}>
-                <Transition.Child
-                    as={Fragment}
-                    enter="ease-out duration-300"
-                    enterFrom="opacity-0"
-                    enterTo="opacity-100"
-                    leave="ease-in duration-200"
-                    leaveFrom="opacity-100"
-                    leaveTo="opacity-0"
-                >
-                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
-                </Transition.Child>
-
-                <div className="fixed inset-0 z-10 overflow-y-auto">
-                    <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                        <Transition.Child
-                            as={Fragment}
-                            enter="ease-out duration-300"
-                            enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                            enterTo="opacity-100 translate-y-0 sm:scale-100"
-                            leave="ease-in duration-200"
-                            leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-                            leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                        >
-                            <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl sm:p-6">
-                                <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
-                                    <button
-                                        type="button"
-                                        className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                        onClick={onClose}
-                                    >
-                                        <span className="sr-only">Close</span>
-                                        <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-                                    </button>
-                                </div>
-                                <div>
-                                    <div className="mt-3 text-center sm:mt-0 sm:text-left">
-                                        <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900 flex justify-between items-center">
-                                            <span>Invoice {invoice.invoiceNumber}</span>
-                                            {invoice.fileUrl && (
-                                                <button
-                                                    onClick={handleDownload}
-                                                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                                >
-                                                    <ArrowDownTrayIcon className="h-4 w-4 mr-1" />
-                                                    Download
-                                                </button>
-                                            )}
-                                        </Dialog.Title>
-                                        <div className="mt-4">
-                                            {invoice.fileUrl ? (
-                                                <div className="aspect-[8.5/11] w-full border border-gray-200 rounded-md overflow-hidden">
-                                                    <iframe 
-                                                        src={`${invoice.fileUrl}#toolbar=0&navpanes=0`} 
-                                                        className="w-full h-full"
-                                                        title={`Invoice ${invoice.invoiceNumber}`}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="bg-gray-100 p-8 text-center rounded-md">
-                                                    <p className="text-gray-500">No PDF available for this invoice</p>
-                                                    <div className="mt-4 p-4 bg-white rounded-md shadow-sm">
-                                                        <h4 className="font-medium text-gray-900">Invoice Details</h4>
-                                                        <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
-                                                            <div>
-                                                                <p className="text-gray-500">Invoice Number</p>
-                                                                <p className="font-medium">{invoice.invoiceNumber}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-gray-500">Date</p>
-                                                                <p className="font-medium">{new Date(invoice.date).toLocaleDateString()}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-gray-500">Amount</p>
-                                                                <p className="font-medium">${typeof invoice.amount === 'number' ? invoice.amount.toFixed(2) : '0.00'}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-gray-500">Status</p>
-                                                                <p className={`font-medium ${
-                                                                    invoice.status === 'paid' ? 'text-green-600' : 
-                                                                    invoice.status === 'pending' || invoice.status === 'sent' ? 'text-yellow-600' : 
-                                                                    invoice.status === 'overdue' ? 'text-red-600' :
-                                                                    'text-gray-600'
-                                                                }`}>
-                                                                    {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </Dialog.Panel>
-                        </Transition.Child>
+        <BaseModal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={`Invoice #${invoice.invoiceNumber}`}
+            maxWidth="4xl"
+        >
+            <div className="mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <h4 className="text-sm font-medium text-gray-500">Invoice Details</h4>
+                        <div className="mt-2 text-sm text-gray-900">
+                            <p><span className="font-medium">Date:</span> {new Date(invoice.date).toLocaleDateString()}</p>
+                            <p><span className="font-medium">Status:</span> {invoice.status}</p>
+                            <p><span className="font-medium">Amount:</span> {formatCurrency(invoice.amount)}</p>
+                            {invoice.clientName && (
+                                <p><span className="font-medium">Client:</span> {invoice.clientName}</p>
+                            )}
+                            {invoice.jobsiteName && (
+                                <p><span className="font-medium">Jobsite:</span> {invoice.jobsiteName}</p>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-medium text-gray-500">Payment Information</h4>
+                        <div className="mt-2 text-sm text-gray-900">
+                            <p>Please include the invoice number with your payment.</p>
+                            <p className="mt-2"><span className="font-medium">Total Due:</span> {formatCurrency(invoice.amount)}</p>
+                        </div>
                     </div>
                 </div>
-            </Dialog>
-        </Transition.Root>
+
+                {invoice.items && invoice.items.length > 0 && (
+                    <div className="mt-8">
+                        <h4 className="text-sm font-medium text-gray-500 mb-4">Invoice Items</h4>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Description
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Quantity
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Unit Price
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Total
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {invoice.items.map((item, index) => (
+                                        <tr key={index}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {item.description}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                                {item.quantity}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                                {formatCurrency(item.unitPrice)}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                                {formatCurrency(item.quantity * item.unitPrice)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th scope="row" colSpan={3} className="px-6 py-3 text-right text-sm font-medium text-gray-900">
+                                            Total
+                                        </th>
+                                        <td className="px-6 py-3 text-right text-sm font-medium text-gray-900">
+                                            {formatCurrency(invoice.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {invoice.notes && (
+                    <div className="mt-8">
+                        <h4 className="text-sm font-medium text-gray-500 mb-2">Notes</h4>
+                        <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-900">
+                            {invoice.notes}
+                        </div>
+                    </div>
+                )}
+
+                <div className="mt-8 flex justify-end">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </BaseModal>
     );
 } 

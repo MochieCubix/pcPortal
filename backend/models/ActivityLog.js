@@ -22,7 +22,8 @@ const activityLogSchema = new mongoose.Schema({
             'reject',
             'assign',
             'unassign',
-            'submit'
+            'submit',
+            'parse'
         ]
     },
     resourceType: {
@@ -37,7 +38,8 @@ const activityLogSchema = new mongoose.Schema({
             'timesheet', 
             'document',
             'position',
-            'setting'
+            'setting',
+            'invoice'
         ]
     },
     resourceId: {

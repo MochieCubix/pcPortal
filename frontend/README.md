@@ -79,3 +79,72 @@ All these features and more make **NextAdmin** a robust, well-rounded solution f
 
 ### Version 1.0
 - Initial Release - [May 13, 2024]
+
+# PC Portal Frontend
+
+This is the frontend application for PC Portal, a comprehensive business management system.
+
+## Getting Started
+
+1. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+
+2. Run the development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Features
+
+### Document Processing with AWS Textract
+
+The application includes a document processing feature powered by AWS Textract, which automatically extracts data from PDF timesheets.
+
+#### Setting up AWS for Document Processing
+
+1. Configure AWS credentials in your `.env.local` file:
+   ```
+   AWS_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=your-access-key
+   AWS_SECRET_ACCESS_KEY=your-secret-key
+   S3_BUCKET_NAME=your-bucket-name
+   HUMAN_LOOP_FLOW_DEFINITION_ARN=your-a2i-flow-definition-arn
+   SAGEMAKER_ROLE_ARN=your-sagemaker-role-arn
+   DYNAMODB_TABLE_NAME=textract-results
+   ```
+
+2. Create required AWS resources:
+   - An S3 bucket for storing documents
+   - A DynamoDB table for storing extraction results
+   - IAM roles with appropriate permissions
+   - (Optional) Amazon A2I flow definition for human review
+
+#### Using the Document Processing Feature
+
+1. Navigate to the Document Processing page via the sidebar menu under Management
+2. Upload a PDF timesheet using drag-and-drop or the file browser
+3. The system will process the document and extract data:
+   - Form fields (key-value pairs) with confidence scores
+   - Table data
+4. If confidence scores are low for critical fields, the system will trigger human review
+5. You can train the model using the "Train SageMaker Model" button to improve accuracy over time
+
+## Project Structure
+
+- `/src/app` - Next.js App Router pages
+- `/src/components` - Reusable React components
+- `/src/contexts` - React context providers
+- `/src/hooks` - Custom React hooks
+- `/src/utils` - Utility functions
+
+## Environment Variables
+
+See `.env.local.example` for required environment variables.

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import ClientLayout from '@/components/Layouts/ClientLayout';
 import Link from 'next/link';
-import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { ChevronUpIcon, ChevronDownIcon, EyeIcon, PencilIcon } from '@heroicons/react/24/outline';
+import ClientFormModal from '@/components/ClientFormModal';
 
 interface Address {
     street: string;
@@ -19,8 +20,9 @@ interface Client {
     _id: string;
     companyName: string;
     abn: string;
-    phone: string;
-    address: Address | string;
+    accountEmail: string;
+    accountsPhone: string;
+    officeAddress: Address | string;
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -33,6 +35,7 @@ export default function ClientsPage() {
     const [error, setError] = useState('');
     const [sortDirection, setSortDirection] = useState<SortDirection>(null);
     const [sortedClients, setSortedClients] = useState<Client[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const formatAddress = (address: Address | string | undefined) => {
         if (!address) return 'No address provided';
@@ -114,6 +117,11 @@ export default function ClientsPage() {
         }
     };
 
+    const handleClientCreated = async () => {
+        await fetchClients();
+        setIsModalOpen(false);
+    };
+
     if (!user || user.role !== 'admin') {
         return (
             <ClientLayout>
@@ -138,14 +146,21 @@ export default function ClientsPage() {
                         <h1 className="text-3xl font-bold leading-tight text-gray-900">
                             Manage Clients
                         </h1>
-                        <Link
-                            href="/clients/create"
+                        <button
+                            onClick={() => setIsModalOpen(true)}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
                         >
                             Add Client
-                        </Link>
+                        </button>
                     </div>
                 </header>
+
+                <ClientFormModal
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    onClientCreated={handleClientCreated}
+                />
+
                 <main>
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                         <div className="px-4 py-8 sm:px-0">
@@ -191,10 +206,13 @@ export default function ClientsPage() {
                                                         ABN
                                                     </th>
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Phone
+                                                        Account Email
                                                     </th>
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Address
+                                                        Accounts Phone
+                                                    </th>
+                                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                        Office Address
                                                     </th>
                                                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                         Actions
@@ -211,24 +229,31 @@ export default function ClientsPage() {
                                                             {client.abn}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                            {client.phone}
+                                                            {client.accountEmail}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                            {formatAddress(client.address)}
+                                                            {client.accountsPhone}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {formatAddress(client.officeAddress)}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                            <Link
-                                                                href={`/clients/${client._id}`}
-                                                                className="text-blue-600 hover:text-blue-900 mr-4"
-                                                            >
-                                                                View
-                                                            </Link>
-                                                            <Link
-                                                                href={`/clients/${client._id}/edit`}
-                                                                className="text-blue-600 hover:text-blue-900"
-                                                            >
-                                                                Edit
-                                                            </Link>
+                                                            <div className="flex justify-end space-x-3">
+                                                                <Link
+                                                                    href={`/clients/${client._id}`}
+                                                                    className="text-blue-600 hover:text-blue-900"
+                                                                    title="View Client"
+                                                                >
+                                                                    <EyeIcon className="h-5 w-5" />
+                                                                </Link>
+                                                                <Link
+                                                                    href={`/clients/${client._id}/edit`}
+                                                                    className="text-indigo-600 hover:text-indigo-900"
+                                                                    title="Edit Client"
+                                                                >
+                                                                    <PencilIcon className="h-5 w-5" />
+                                                                </Link>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}

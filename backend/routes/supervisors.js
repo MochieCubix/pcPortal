@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Jobsite = require('../models/Jobsite');
 const Timesheet = require('../models/Timesheet');
 const { authenticateToken, isAdmin, isSupervisor } = require('../middleware/auth');
+const ActivityLog = require('../models/ActivityLog');
 
 // Get all supervisors (admin only)
 router.get('/', authenticateToken, isAdmin, async (req, res) => {
@@ -79,6 +80,18 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         });
         
         await newSupervisor.save();
+        
+        // Log the activity
+        const activityLog = new ActivityLog({
+            user: req.user._id,
+            action: 'create',
+            resourceType: 'supervisor',
+            resourceId: newSupervisor._id,
+            description: `${req.user.firstName} ${req.user.lastName} created supervisor ${newSupervisor.firstName} ${newSupervisor.lastName}`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        });
+        await activityLog.save();
         
         // TODO: Send welcome email with temporary password
         
