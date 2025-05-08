@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ResizableBox } from 'react-resizable';
-import { EyeIcon, PencilIcon, ArrowDownTrayIcon, PaperAirplaneIcon, TrashIcon, DocumentMagnifyingGlassIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { EyeIcon, PencilIcon, ArrowDownTrayIcon, PaperAirplaneIcon, TrashIcon, DocumentMagnifyingGlassIcon, CheckIcon, DocumentTextIcon } from "@heroicons/react/24/outline";
 import 'react-resizable/css/styles.css';
 
 // Types for the component props and internal data
@@ -13,6 +13,7 @@ interface InvoiceTableProps {
   onDeleteInvoice?: (invoice: any) => void;
   onParsePdf?: (invoice: any) => void;
   onMarkAsPaid?: (invoice: any) => void;
+  onAttachTimesheet?: (invoice: any) => void;
   formatDate?: (date: string) => string;
   formatCurrency?: (amount: number) => string;
   showClient?: boolean;
@@ -72,6 +73,7 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
   onDeleteInvoice,
   onParsePdf,
   onMarkAsPaid,
+  onAttachTimesheet,
   formatDate = defaultFormatDate,
   formatCurrency = defaultFormatCurrency,
   showClient = true,
@@ -100,8 +102,16 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
     invoiceId: null
   });
 
+  // Store sorted row indices
+  const [sortedIndices, setSortedIndices] = useState<string[]>([]);
+
   // Ref for table container - used to detect clicks outside the context menu
   const tableRef = useRef<HTMLDivElement>(null);
+  
+  // Memoize selected invoice objects for better performance
+  const selectedInvoiceObjects = useMemo(() => {
+    return invoices.filter(inv => selectedRows.includes(inv._id));
+  }, [invoices, selectedRows]);
 
   // Set default column widths on first render
   const defaultColumns = useMemo<Column[]>(() => [
@@ -258,28 +268,26 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
           setLastSelectedRow(invoiceId);
         }
         
-        console.log('Selected rows (CTRL):', newSelection);
         return newSelection;
       });
     }
-    // SHIFT key for selecting ranges
+    // SHIFT key for selecting ranges based on sorted order
     else if (event.shiftKey && lastSelectedRow) {
       // Prevent text selection when using SHIFT-click
       window.getSelection()?.removeAllRanges();
       
-      const invoiceIds = invoices.map(invoice => invoice._id);
-      const currentIndex = invoiceIds.indexOf(invoiceId);
-      const lastIndex = invoiceIds.indexOf(lastSelectedRow);
+      // Use the sortedIndices for range selection
+      const currentIndex = sortedIndices.indexOf(invoiceId);
+      const lastIndex = sortedIndices.indexOf(lastSelectedRow);
       
       if (currentIndex >= 0 && lastIndex >= 0) {
         const start = Math.min(currentIndex, lastIndex);
         const end = Math.max(currentIndex, lastIndex);
-        const rangeIds = invoiceIds.slice(start, end + 1);
+        const rangeIds = sortedIndices.slice(start, end + 1);
         
         setSelectedRows(prev => {
           // Keep previously selected rows and add the range
           const newSelection = Array.from(new Set([...prev, ...rangeIds]));
-          console.log('Selected rows (SHIFT):', newSelection);
           return newSelection;
         });
       }
@@ -288,39 +296,31 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
     else {
       setSelectedRows([invoiceId]);
       setLastSelectedRow(invoiceId);
-      console.log('Selected rows (Single):', [invoiceId]);
     }
-  }, [invoices, lastSelectedRow]);
+  }, [lastSelectedRow, sortedIndices]);
 
-  // Handle right-click to show context menu
+  // Handle right-click to show context menu with improved positioning
   const handleContextMenu = useCallback((event: React.MouseEvent, invoiceId: string) => {
     event.preventDefault();
     
-    // Hide any visible context menu first
-    if (contextMenu.visible) {
-      setContextMenu({
-        x: 0,
-        y: 0,
-        visible: false,
-        invoiceId: null
-      });
-      return;
-    }
-    
-    // Calculate position for the context menu
-    setContextMenu({
+    // Calculate position for the context menu - exactly where the cursor is
+    const position = {
       x: event.clientX,
       y: event.clientY,
       visible: true,
       invoiceId
-    });
+    };
     
-    // Select the row when right-clicked
+    // If right-clicking on an already selected row, keep the selection
+    // Otherwise, clear the selection and select only this row
     if (!selectedRows.includes(invoiceId)) {
       setSelectedRows([invoiceId]);
       setLastSelectedRow(invoiceId);
     }
-  }, [contextMenu, selectedRows]);
+    
+    // Set context menu position
+    setContextMenu(position);
+  }, [selectedRows]);
 
   // Handle column sort
   const handleSort = useCallback((key: string) => {
@@ -339,23 +339,66 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
 
   // Handle context menu actions
   const handleContextMenuAction = useCallback((action: string) => {
-    if (!contextMenu.invoiceId) return;
-    
-    const invoice = invoices.find(inv => inv._id === contextMenu.invoiceId);
-    if (!invoice) return;
-    
-    switch (action) {
-      case 'edit':
-        if (onEditInvoice) onEditInvoice(invoice);
-        break;
-      case 'paid':
-        if (onMarkAsPaid) onMarkAsPaid(invoice);
-        break;
-      case 'delete':
-        if (onDeleteInvoice) onDeleteInvoice(invoice);
-        break;
-      default:
-        break;
+    // If we have multiple rows selected and context menu was opened on one of them,
+    // apply the action to all selected rows
+    if (selectedRows.length > 0 && contextMenu.invoiceId && selectedRows.includes(contextMenu.invoiceId)) {
+      // Process each selected invoice
+      const selectedInvoiceObjects = invoices.filter(inv => selectedRows.includes(inv._id));
+        
+        switch (action) {
+          case 'view':
+          if (selectedRows.length === 1) {
+            const invoice = invoices.find(inv => inv._id === selectedRows[0]);
+            if (invoice) onViewInvoice(invoice);
+          }
+            break;
+          case 'edit':
+          if (onEditInvoice && selectedRows.length === 1) {
+            const invoice = invoices.find(inv => inv._id === selectedRows[0]);
+            if (invoice) onEditInvoice(invoice);
+          }
+            break;
+          case 'paid':
+          if (onMarkAsPaid) {
+            if (selectedInvoiceObjects.length > 0) {
+              onMarkAsPaid(selectedInvoiceObjects);
+            }
+          }
+            break;
+          case 'delete':
+          if (onDeleteInvoice) {
+            selectedInvoiceObjects.forEach(invoice => {
+              onDeleteInvoice(invoice);
+            });
+          }
+            break;
+          case 'download':
+          if (onDownloadInvoice) {
+            selectedInvoiceObjects.forEach(invoice => {
+              onDownloadInvoice(invoice);
+            });
+          }
+            break;
+          case 'send':
+          if (onSendInvoice) {
+            onSendInvoice(selectedInvoiceObjects);
+          }
+            break;
+          case 'parse':
+          if (onParsePdf && selectedRows.length === 1) {
+            const invoice = invoices.find(inv => inv._id === selectedRows[0]);
+            if (invoice) onParsePdf(invoice);
+          }
+          break;
+        case 'attachTimesheet':
+          if (onAttachTimesheet && selectedRows.length === 1) {
+            const invoice = invoices.find(inv => inv._id === selectedRows[0]);
+            if (invoice) onAttachTimesheet(invoice);
+          }
+            break;
+          default:
+            break;
+        }
     }
     
     // Hide the context menu after action
@@ -365,12 +408,19 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
       visible: false,
       invoiceId: null
     });
-  }, [contextMenu.invoiceId, invoices, onEditInvoice, onMarkAsPaid, onDeleteInvoice]);
+  }, [contextMenu.invoiceId, invoices, selectedRows, onViewInvoice, onEditInvoice, onMarkAsPaid, onDeleteInvoice, onDownloadInvoice, onSendInvoice, onParsePdf, onAttachTimesheet]);
 
-  // Close context menu when clicking outside
+  // Close context menu when clicking outside or inside the table (left click only)
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (contextMenu.visible && tableRef.current && !tableRef.current.contains(event.target as Node)) {
+      if (contextMenu.visible) {
+        // Check if the click is inside the context menu itself
+        const contextMenuElement = document.querySelector('[data-context-menu="true"]');
+        if (contextMenuElement && contextMenuElement.contains(event.target as Node)) {
+          return;
+        }
+        
+        // Close menu on any click outside the context menu
         setContextMenu({
           x: 0,
           y: 0,
@@ -386,7 +436,7 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
     };
   }, [contextMenu.visible]);
 
-  // Sort the invoices
+  // Sort the invoices using memoization for performance
   const sortedInvoices = useMemo(() => {
     if (!sortConfig.key || sortConfig.key === 'select' || sortConfig.key === 'actions') {
       return [...invoices];
@@ -424,127 +474,24 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
     });
   }, [invoices, sortConfig, defaultColumns]);
 
-  // Context Menu Component
-  const ContextMenu = useMemo(() => {
-    if (!contextMenu.visible) return null;
-    
-    return (
-      <div 
-        className="absolute z-50 bg-white rounded-md shadow-lg border border-gray-200 py-1 w-48"
-        style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
-      >
-        {onEditInvoice && (
-          <button
-            onClick={() => handleContextMenuAction('edit')}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-          >
-            <PencilIcon className="h-4 w-4 mr-2 text-gray-500" />
-            Edit Invoice
-          </button>
-        )}
-        {onMarkAsPaid && (
-          <button
-            onClick={() => handleContextMenuAction('paid')}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-          >
-            <CheckIcon className="h-4 w-4 mr-2 text-gray-500" />
-            Mark as Paid
-          </button>
-        )}
-        {onDeleteInvoice && (
-          <button
-            onClick={() => handleContextMenuAction('delete')}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-          >
-            <TrashIcon className="h-4 w-4 mr-2 text-gray-500" />
-            Delete Invoice
-          </button>
-        )}
-      </div>
-    );
-  }, [contextMenu, handleContextMenuAction, onEditInvoice, onMarkAsPaid, onDeleteInvoice]);
+  // Update sortedIndices whenever sortedInvoices changes
+  useEffect(() => {
+    setSortedIndices(sortedInvoices.map(invoice => invoice._id));
+  }, [sortedInvoices]);
 
-  // Render the table
+  // Memoize table row rendering for better performance
+  const renderTableRows = useMemo(() => {
+    if (sortedInvoices.length === 0) {
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden" ref={tableRef}>
-      <div className="overflow-x-auto">
-        {selectedRows.length > 0 && (
-          <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-            <span className="text-sm text-gray-600">
-              {selectedRows.length} {selectedRows.length === 1 ? 'invoice' : 'invoices'} selected
-            </span>
-            <button
-              onClick={() => handleGetSelectedInvoicesJSON()}
-              className="px-4 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-            >
-              Get Selected JSON
-            </button>
-          </div>
-        )}
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              {defaultColumns.map((column, index) => (
-                <th
-                  key={column.key}
-                  scope="col"
-                  className={`relative ${index === 0 ? 'pl-4' : 'pl-0'} pr-0 py-2 text-${column.textAlign || 'left'} text-xs font-medium text-gray-500 uppercase tracking-wider ${column.sortable ? 'cursor-pointer' : ''}`}
-                  onClick={column.sortable ? () => handleSort(column.key) : undefined}
-                >
-                  <ResizableBox
-                    width={columnWidths[column.key] || column.width}
-                    height={30}
-                    handle={
-                      <div
-                        className="absolute right-0 top-0 h-full w-3 cursor-col-resize group hover:bg-blue-500 hover:opacity-50"
-                        onClick={e => e.stopPropagation()}
-                      />
-                    }
-                    onResize={handleResize(column.key)}
-                    axis="x"
-                    minConstraints={[50, 30]}
-                  >
-                    <div className="flex h-full items-center truncate">
-                      {column.key === 'select' ? (
-                        <div className="flex items-center px-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.length === invoices.length && invoices.length > 0}
-                            onChange={() => {
-                              if (selectedRows.length === invoices.length) {
-                                setSelectedRows([]);
-                              } else {
-                                setSelectedRows(invoices.map(i => i._id));
-                              }
-                            }}
-                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                          />
-                        </div>
-                      ) : (
-                        <div className={`flex items-center ${column.textAlign === 'right' ? 'justify-end w-full pr-3' : 'pl-2'}`}>
-                          {column.header}
-                          {column.sortable && sortConfig.key === column.key && (
-                            <span className="ml-2">
-                              {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </ResizableBox>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
-            {sortedInvoices.length === 0 ? (
               <tr>
                 <td colSpan={defaultColumns.length} className="px-6 py-4 text-center text-sm text-gray-500">
                   No invoices found
                 </td>
               </tr>
-            ) : (
-              sortedInvoices.map((invoice) => (
+      );
+    }
+    
+    return sortedInvoices.map((invoice) => (
                 <tr
                   key={invoice._id}
                   className={`${selectedRows.includes(invoice._id) ? 'bg-blue-100' : ''} hover:bg-gray-50 transition-colors duration-150`}
@@ -612,7 +559,7 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onSendInvoice(invoice);
+                          onSendInvoice([invoice]);
                                   }}
                                   className="p-1 rounded-md text-gray-500 hover:text-blue-700 hover:bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                   title="Send Invoice"
@@ -670,8 +617,190 @@ const InvoiceTable: React.FC<InvoiceTableProps> = ({
                     </td>
                   ))}
                 </tr>
-              ))
-            )}
+    ));
+  }, [sortedInvoices, defaultColumns, selectedRows, handleRowSelect, handleContextMenu, customActions, onViewInvoice, onDownloadInvoice, onSendInvoice, onParsePdf, onEditInvoice, onDeleteInvoice]);
+
+  // Context Menu Component with enhanced positioning
+  const ContextMenu = useMemo(() => {
+    if (!contextMenu.visible) return null;
+    
+    return (
+      <div 
+        className="fixed z-50 bg-white rounded-md shadow-lg border border-gray-200 py-1 w-48"
+        style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+        data-context-menu="true"
+      >
+        <button
+          onClick={() => handleContextMenuAction('view')}
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+        >
+          <EyeIcon className="h-4 w-4 mr-2 text-gray-500" />
+          View Invoice
+        </button>
+        {onEditInvoice && (
+          <button
+            onClick={() => handleContextMenuAction('edit')}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <PencilIcon className="h-4 w-4 mr-2 text-gray-500" />
+            Edit Invoice
+          </button>
+        )}
+        {onMarkAsPaid && (
+          <button
+            onClick={() => handleContextMenuAction('paid')}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <CheckIcon className="h-4 w-4 mr-2 text-gray-500" />
+            Mark as Paid
+          </button>
+        )}
+        {onDownloadInvoice && (
+          <button
+            onClick={() => handleContextMenuAction('download')}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <ArrowDownTrayIcon className="h-4 w-4 mr-2 text-gray-500" />
+            Download Invoice
+          </button>
+        )}
+        {onSendInvoice && (
+          <button
+            onClick={() => handleContextMenuAction('send')}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <PaperAirplaneIcon className="h-4 w-4 mr-2 text-gray-500" />
+            Send Invoice
+          </button>
+        )}
+        {onAttachTimesheet && (
+          <button
+            onClick={() => handleContextMenuAction('attachTimesheet')}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <DocumentTextIcon className="h-4 w-4 mr-2 text-gray-500" />
+            Attach Timesheet
+          </button>
+        )}
+        {onParsePdf && (
+          <button
+            onClick={() => handleContextMenuAction('parse')}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <DocumentMagnifyingGlassIcon className="h-4 w-4 mr-2 text-gray-500" />
+            Parse PDF
+          </button>
+        )}
+        {onDeleteInvoice && (
+          <button
+            onClick={() => handleContextMenuAction('delete')}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <TrashIcon className="h-4 w-4 mr-2 text-gray-500" />
+            Delete Invoice
+          </button>
+        )}
+      </div>
+    );
+  }, [contextMenu, handleContextMenuAction, onViewInvoice, onEditInvoice, onMarkAsPaid, onDeleteInvoice, onDownloadInvoice, onSendInvoice, onParsePdf, onAttachTimesheet]);
+
+  // Render the table with performance optimizations
+  return (
+    <div className="bg-white shadow rounded-lg overflow-hidden" ref={tableRef}>
+      <div className="overflow-x-auto">
+        {selectedRows.length > 0 && (
+          <div className="px-4 py-2 bg-blue-50 border-b border-gray-200 flex items-center justify-between">
+            <span className="text-sm text-gray-600">
+              {selectedRows.length} {selectedRows.length === 1 ? 'invoice' : 'invoices'} selected
+            </span>
+            <div className="flex gap-2">
+              {onMarkAsPaid && selectedRows.length > 0 && (
+                <button
+                  onClick={() => handleContextMenuAction('paid')}
+                  className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center"
+                >
+                  <CheckIcon className="h-3 w-3 mr-1" />
+                  Mark as Paid
+                </button>
+              )}
+              {onSendInvoice && selectedRows.length > 0 && (
+                <button
+                  onClick={() => handleContextMenuAction('send')}
+                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center"
+                >
+                  <PaperAirplaneIcon className="h-3 w-3 mr-1" />
+                  Send
+                </button>
+              )}
+              {onDownloadInvoice && selectedRows.length > 0 && (
+                <button
+                  onClick={() => handleContextMenuAction('download')}
+                  className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors flex items-center"
+                >
+                  <ArrowDownTrayIcon className="h-3 w-3 mr-1" />
+                  Download
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              {defaultColumns.map((column, index) => (
+                <th
+                  key={column.key}
+                  scope="col"
+                  className={`relative ${index === 0 ? 'pl-4' : 'pl-0'} pr-0 py-2 text-${column.textAlign || 'left'} text-xs font-medium text-gray-500 uppercase tracking-wider ${column.sortable ? 'cursor-pointer' : ''}`}
+                  onClick={column.sortable ? () => handleSort(column.key) : undefined}
+                >
+                  <ResizableBox
+                    width={columnWidths[column.key] || column.width}
+                    height={30}
+                    handle={
+                      <div
+                        className="absolute right-0 top-0 h-full w-3 cursor-col-resize group hover:bg-blue-500 hover:opacity-50"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    }
+                    onResize={handleResize(column.key)}
+                    axis="x"
+                    minConstraints={[50, 30]}
+                  >
+                    <div className="flex h-full items-center truncate">
+                      {column.key === 'select' ? (
+                        <div className="flex items-center px-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.length === invoices.length && invoices.length > 0}
+                            onChange={() => {
+                              if (selectedRows.length === invoices.length) {
+                                setSelectedRows([]);
+                              } else {
+                                setSelectedRows(invoices.map(i => i._id));
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+                          />
+                        </div>
+                      ) : (
+                        <div className={`flex items-center ${column.textAlign === 'right' ? 'justify-end w-full pr-3' : 'pl-2'}`}>
+                          {column.header}
+                          {column.sortable && sortConfig.key === column.key && (
+                            <span className="ml-2">
+                              {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </ResizableBox>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 bg-white">
+            {renderTableRows}
           </tbody>
         </table>
         

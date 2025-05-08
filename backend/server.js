@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const config = require('./config/config');
 const path = require('path');
 const multer = require('multer');
+const fs = require('fs');
 require('dotenv').config();
 
 // Import routes
@@ -22,6 +23,7 @@ const settingRoutes = require('./routes/settings');
 const notificationRoutes = require('./routes/notifications');
 const invoiceRoutes = require('./routes/invoices');
 const activityRoutes = require('./routes/activity');
+const commentRoutes = require('./routes/comments');
 
 const app = express();
 
@@ -29,6 +31,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev')); // HTTP request logger
+
+// Make sure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -48,6 +56,7 @@ app.use('/api/settings', settingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api/comments', commentRoutes);
 
 // Direct upload endpoint for testing
 const directUpload = multer({ dest: 'uploads/' });

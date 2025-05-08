@@ -250,8 +250,8 @@ router.post('/request-access', async (req, res) => {
             await user.save();
 
             // Send magic link email to the configured email address
-            await sendMagicLink(process.env.EMAIL_USER, token);
-            console.log('Magic link sent successfully to:', process.env.EMAIL_USER);
+            await sendMagicLink(email, token);
+            console.log('Magic link sent successfully to:', email);
         } else if (method === 'otp') {
             // Generate and save OTP
             const otp = generateOTP();
@@ -262,11 +262,11 @@ router.post('/request-access', async (req, res) => {
             await user.save();
 
             // Send OTP email to the configured email address
-            await sendOTP(process.env.EMAIL_USER, otp);
-            console.log('OTP sent successfully to:', process.env.EMAIL_USER);
+            await sendOTP(email, otp);
+            console.log('OTP sent successfully to:', email);
         }
 
-        res.json({ message: `Access ${method === 'magic-link' ? 'link' : 'code'} sent to ${process.env.EMAIL_USER}` });
+        res.json({ message: `Access ${method === 'magic-link' ? 'link' : 'code'} sent to ${email}` });
     } catch (error) {
         console.error('Error in request-access:', error);
         res.status(500).json({ error: error.message });

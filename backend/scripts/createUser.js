@@ -8,19 +8,19 @@ const createUser = async () => {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('Connected to MongoDB');
 
-        // Create admin user
-        const adminUser = new User({
-            email: 'prochoicerigging@gmail.com',
-            firstName: 'Admin',
-            lastName: 'User',
-            password: '123', // This will be hashed automatically
-            role: 'admin',
-            status: 'active',
-            isEmailVerified: true
-        });
+        // // Create admin user
+        // const adminUser = new User({
+        //     email: 'prochoicerigging@gmail.com',
+        //     firstName: 'Admin',
+        //     lastName: 'User',
+        //     password: '123', // This will be hashed automatically
+        //     role: 'admin',
+        //     status: 'active',
+        //     isEmailVerified: true
+        // });
 
-        await adminUser.save();
-        console.log('Admin user created successfully');
+        // await adminUser.save();
+        // console.log('Admin user created successfully');
 
         // Disconnect from MongoDB
         await mongoose.disconnect();
