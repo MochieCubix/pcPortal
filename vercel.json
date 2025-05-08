@@ -3,6 +3,10 @@
   "buildCommand": "cd frontend && yarn install && yarn build",
   "outputDirectory": "frontend/.next",
   "framework": "nextjs",
+  "env": {
+    "NEXT_PUBLIC_AWS_REGION": "ap-southeast-2",
+    "NEXT_PUBLIC_S3_INVOICE_BUCKET": "pcpanel"
+  },
   "builds": [
     { "src": "frontend/package.json", "use": "@vercel/next" }
   ],

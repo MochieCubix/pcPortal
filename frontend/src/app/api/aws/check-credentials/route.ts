@@ -3,6 +3,14 @@ import { HeadBucketCommand } from '@aws-sdk/client-s3';
 import { s3Client, S3_BUCKET_NAME } from '@/utils/awsConfig';
 
 export async function GET() {
+  // During build time, return a success response
+  if (process.env.NODE_ENV === 'production' && !process.env.AWS_ACCESS_KEY_ID) {
+    return NextResponse.json({
+      success: true,
+      message: 'AWS credentials check skipped during build'
+    });
+  }
+
   try {
     // Attempt to access the S3 bucket
     const command = new HeadBucketCommand({

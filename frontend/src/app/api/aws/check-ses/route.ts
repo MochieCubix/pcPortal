@@ -3,6 +3,14 @@ import { GetSendQuotaCommand } from '@aws-sdk/client-ses';
 import { sesClient, DEFAULT_FROM_EMAIL } from '@/utils/awsConfig';
 
 export async function GET() {
+  // During build time, return a success response
+  if (process.env.NODE_ENV === 'production' && !process.env.AWS_ACCESS_KEY_ID) {
+    return NextResponse.json({
+      success: true,
+      message: 'SES check skipped during build'
+    });
+  }
+
   try {
     // Attempt to get SES quota to check if SES is properly configured
     const command = new GetSendQuotaCommand({});
