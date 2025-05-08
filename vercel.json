@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend && yarn install && yarn build",
+  "buildCommand": "cd frontend && yarn install && yarn clean && cross-env TEMP=./temp yarn build",
   "outputDirectory": "frontend/.next",
   "framework": "nextjs",
   "env": {
     "NEXT_PUBLIC_AWS_REGION": "ap-southeast-2",
-    "NEXT_PUBLIC_S3_INVOICE_BUCKET": "pcpanel"
+    "NEXT_PUBLIC_S3_INVOICE_BUCKET": "pcpanel",
+    "TEMP": "./temp"
   },
   "builds": [
     { "src": "frontend/package.json", "use": "@vercel/next" }
