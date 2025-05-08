@@ -8,6 +8,10 @@ backend/node_modules/
 dist/
 out/
 
+# Temp directories
+frontend/temp/
+temp/
+
 # Logs
 *.log
 npm-debug.log*

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function VerifyPage() {
+function VerifyPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { verifyMagicLink } = useAuth();
@@ -69,4 +69,26 @@ export default function VerifyPage() {
     }
 
     return null;
+}
+
+// Loading fallback for Suspense
+function LoadingFallback() {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+            <div className="p-8 bg-white rounded-lg shadow-md">
+                <div className="flex flex-col items-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                    <p className="mt-4 text-gray-600">Loading verification page...</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default function VerifyPage() {
+    return (
+        <Suspense fallback={<LoadingFallback />}>
+            <VerifyPageContent />
+        </Suspense>
+    );
 } 

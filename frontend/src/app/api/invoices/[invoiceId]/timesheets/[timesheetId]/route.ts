@@ -20,11 +20,11 @@ import { invoiceTimesheets } from '../route';
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { invoiceId: string; timesheetId: string } }
+  { params }: { params: { invoiceId: string; timesheetId: string } }
 ) {
+  const { invoiceId, timesheetId } = params;
+  
   try {
-    const { invoiceId, timesheetId } = context.params;
-    
     // Check if the invoice has any timesheets
     if (!invoiceTimesheets[invoiceId] || invoiceTimesheets[invoiceId].length === 0) {
       return NextResponse.json(

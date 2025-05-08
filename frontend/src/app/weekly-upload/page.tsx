@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import InvoiceTable from '../../components/InvoiceTable';
 import TimesheetUploader from '../../components/TimesheetUploader';
@@ -30,7 +30,7 @@ interface Invoice {
   }>;
 }
 
-const WeeklyUploadPage: React.FC = () => {
+function WeeklyUploadContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -447,6 +447,24 @@ const WeeklyUploadPage: React.FC = () => {
         </div>
       )}
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <p className="ml-3">Loading data...</p>
+    </div>
+  );
+}
+
+const WeeklyUploadPage: React.FC = () => {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <WeeklyUploadContent />
+    </Suspense>
   );
 };
 
