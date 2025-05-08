@@ -1,0 +1,6 @@
+{
+  "env": {
+    "TEMP": "/tmp"
+  },
+  "buildCommand": "npm run build"
+} 
