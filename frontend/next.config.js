@@ -25,7 +25,7 @@ const nextConfig = {
   experimental: {
     serverActions: true,
     serverComponentsExternalPackages: [],
-    optimizeCss: true,
+    optimizeCss: false, // Disable CSS optimization temporarily
     optimizePackageImports: ['@aws-sdk/*'],
   },
   images: {

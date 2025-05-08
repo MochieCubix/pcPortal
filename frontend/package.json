@@ -27,6 +27,7 @@
     "axios": "^1.8.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "critters": "^0.0.20",
     "cross-env": "^7.0.3",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
