@@ -4,11 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "cross-env TEMP=./temp next build",
+    "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "clean": "rimraf .next dist temp",
-    "prebuild": "yarn clean"
+    "lint": "next lint"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.758.0",
