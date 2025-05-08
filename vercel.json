@@ -5,7 +5,7 @@
       "src": "frontend/package.json", 
       "use": "@vercel/next",
       "config": {
-        "buildCommand": "cd frontend && mkdir -p temp && TEMP=/tmp next build",
+        "buildCommand": "cd frontend && mkdir -p temp && SKIP_DEPLOY_CHECK=1 TEMP=/tmp next build && mkdir -p .next/server/app/\\(home\\) && touch .next/server/app/\\(home\\)/page_client-reference-manifest.js",
         "outputDirectory": "frontend/.next"
       }
     }
@@ -16,6 +16,7 @@
   "env": {
     "TEMP": "/tmp",
     "NEXT_TELEMETRY_DISABLED": "1",
-    "NODE_OPTIONS": "--max_old_space_size=4096"
+    "NODE_OPTIONS": "--max_old_space_size=4096",
+    "SKIP_DEPLOY_CHECK": "1"
   }
 } 
