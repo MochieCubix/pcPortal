@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
   eslint: {
     // Warning: This allows production builds to successfully complete even if
@@ -14,6 +16,18 @@ const nextConfig = {
   },
   // Skip static optimization
   staticPageGenerationTimeout: 1000,
+  // Use tmp directory for cache
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
+  },
+  // Disable client reference manifest
+  experimental: {
+    serverActions: true,
+    serverComponentsExternalPackages: [],
+    optimizeCss: true,
+    optimizePackageImports: ['@aws-sdk/*'],
+  },
   images: {
     unoptimized: true,
     domains: ["localhost"],

@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "cross-env NEXT_TELEMETRY_DISABLED=1 TEMP=./temp next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "rimraf .next dist temp",
+    "prebuild": "yarn clean"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.758.0",
