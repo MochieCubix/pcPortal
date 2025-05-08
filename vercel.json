@@ -6,7 +6,6 @@
   "env": {
     "NEXT_PUBLIC_AWS_REGION": "ap-southeast-2",
     "NEXT_PUBLIC_S3_INVOICE_BUCKET": "pcpanel",
-    "TEMP": "./temp",
     "NEXT_TELEMETRY_DISABLED": "1"
   },
   "builds": [
