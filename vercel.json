@@ -5,7 +5,7 @@
       "src": "frontend/package.json", 
       "use": "@vercel/next",
       "config": {
-        "buildCommand": "cd frontend && mkdir -p temp && SKIP_DEPLOY_CHECK=1 TEMP=/tmp next build && mkdir -p frontend/.next/server/app/\\(home\\) && touch frontend/.next/server/app/\\(home\\)/page_client-reference-manifest.js",
+        "buildCommand": "cd frontend && mkdir -p temp && SKIP_DEPLOY_CHECK=1 TEMP=/tmp next build && cd .next/server && mkdir -p app/\\(home\\) && touch app/\\(home\\)/page_client-reference-manifest.js",
         "outputDirectory": "frontend/.next"
       }
     }
